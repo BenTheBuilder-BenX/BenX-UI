@@ -1,0 +1,5099 @@
+[
+  {
+    "path": "/panel/api/inbounds/list",
+    "method": "GET",
+    "group": "Inbounds",
+    "summary": "List every inbound owned by the authenticated user, including each inbound’s clientStats traffic counters. settings, streamSettings, and sniffing are returned as nested JSON objects (no escaped strings); legacy callers that send them back as JSON-encoded strings are still accepted on write.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/inbounds/list/slim",
+    "method": "GET",
+    "group": "Inbounds",
+    "summary": "Same shape as /list but with settings.clients[] stripped down to {email, enable, comment} and ClientStats not enriched with UUID/SubId. Use this for list pages; fetch /get/:id when you need the full per-client payload (uuid, password, flow, ...).",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/inbounds/options",
+    "method": "GET",
+    "group": "Inbounds",
+    "summary": "Lightweight picker projection of the authenticated user’s inbounds. Returns id, remark, tag, protocol, port, a server-computed tlsFlowCapable flag (true for VLESS on TCP with tls or reality, or on XHTTP with VLESS encryption / vlessenc enabled), and ssMethod (the Shadowsocks cipher, empty for non-Shadowsocks inbounds — used by the client UI to generate a valid Shadowsocks 2022 PSK). Use this for dropdowns and attach pickers — it skips settings, streamSettings, and clientStats so the payload stays small even on panels with thousands of clients.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/inbounds/allLinks",
+    "method": "GET",
+    "group": "Inbounds",
+    "summary": "Return every protocol URL (vless://, vmess://, trojan://, ss://, hysteria://, mtproto) across all inbounds and all of their clients. Links are rendered through the subscription engine, so the configured remark template (name-only display part) is applied per client — the same output the client info/QR pages use. Protocols without a URL form (socks, http, mixed, wireguard, dokodemo, tunnel) contribute nothing. Used by the panel’s \"Export all inbound links\" action.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/inbounds/get/{id}",
+    "method": "GET",
+    "group": "Inbounds",
+    "summary": "Fetch a single inbound by numeric ID.",
+    "parameters": [
+      {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Inbound ID.",
+        "schema": {
+          "type": "integer"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/inbounds/add",
+    "method": "POST",
+    "group": "Inbounds",
+    "summary": "Create a new inbound. Send the full inbound payload (protocol, port, settings, streamSettings, sniffing, remark, expiryTime, total, enable). settings, streamSettings, and sniffing may be sent as nested JSON objects (preferred) or as JSON-encoded strings (legacy).",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object"
+    },
+    "example": {
+      "enable": true,
+      "remark": "VLESS-443",
+      "listen": "",
+      "port": 443,
+      "protocol": "vless",
+      "expiryTime": 0,
+      "total": 0,
+      "settings": {
+        "clients": [
+          {
+            "id": "...",
+            "email": "user1"
+          }
+        ],
+        "decryption": "none",
+        "fallbacks": []
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "reality",
+        "realitySettings": {
+          "show": false,
+          "dest": "..."
+        }
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": [
+          "http",
+          "tls"
+        ]
+      }
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/inbounds/del/{id}",
+    "method": "POST",
+    "group": "Inbounds",
+    "summary": "Delete an inbound by ID. Also removes its associated client stats rows.",
+    "parameters": [
+      {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Inbound ID.",
+        "schema": {
+          "type": "integer"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/inbounds/bulkDel",
+    "method": "POST",
+    "group": "Inbounds",
+    "summary": "Delete many inbounds in one call. Processes the list sequentially; failures are reported per id and the rest still proceed. Restarts xray at most once.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object"
+    },
+    "example": {
+      "ids": [
+        1,
+        2,
+        3
+      ]
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/inbounds/update/{id}",
+    "method": "POST",
+    "group": "Inbounds",
+    "summary": "Replace an inbound’s configuration. Body shape mirrors /add, but the inbound keeps its stored client list and enable flag: settings.clients and enable in the body are ignored. Manage clients through the /panel/api/clients endpoints and toggle the inbound with /setEnable.",
+    "parameters": [
+      {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Inbound ID.",
+        "schema": {
+          "type": "integer"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object"
+    },
+    "example": {
+      "enable": true,
+      "remark": "VLESS-443",
+      "listen": "",
+      "port": 443,
+      "protocol": "vless",
+      "expiryTime": 0,
+      "total": 0,
+      "settings": {
+        "clients": [
+          {
+            "id": "...",
+            "email": "user1"
+          }
+        ],
+        "decryption": "none",
+        "fallbacks": []
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "reality",
+        "realitySettings": {
+          "show": false,
+          "dest": "..."
+        }
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": [
+          "http",
+          "tls"
+        ]
+      }
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/inbounds/setEnable/{id}",
+    "method": "POST",
+    "group": "Inbounds",
+    "summary": "Toggle only the enable flag without serialising the whole settings JSON. Recommended for UI switches on large inbounds.",
+    "parameters": [
+      {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Inbound ID.",
+        "schema": {
+          "type": "integer"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object"
+    },
+    "example": {
+      "enable": false
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/inbounds/{id}/subSortIndex",
+    "method": "POST",
+    "group": "Inbounds",
+    "summary": "Set only the subscription sort order. Reads the stored inbound, so a reorder cannot carry a stale client list over a concurrent edit.",
+    "parameters": [
+      {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Inbound ID.",
+        "schema": {
+          "type": "integer"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object"
+    },
+    "example": {
+      "subSortIndex": 2
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/inbounds/{id}/resetTraffic",
+    "method": "POST",
+    "group": "Inbounds",
+    "summary": "Zero out upload + download counters for a single inbound. Does not touch per-client counters.",
+    "parameters": [
+      {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Inbound ID.",
+        "schema": {
+          "type": "integer"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/inbounds/{id}/delAllClients",
+    "method": "POST",
+    "group": "Inbounds",
+    "summary": "Remove every client attached to a single inbound while keeping the inbound itself. Collects emails from settings.clients[] and feeds them into the optimized bulk-delete path (runtime user removal + traffic-row cleanup + SyncInbound). Destructive and cannot be undone.",
+    "parameters": [
+      {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Inbound ID.",
+        "schema": {
+          "type": "integer"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/inbounds/resetAllTraffics",
+    "method": "POST",
+    "group": "Inbounds",
+    "summary": "Reset upload + download counters on every inbound. Destructive — accounting history is lost.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/inbounds/import",
+    "method": "POST",
+    "group": "Inbounds",
+    "summary": "Bulk-import an inbound from a JSON blob (e.g. one exported via the UI). The body uses form encoding with a single \"data\" field.",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "string",
+          "description": "JSON-encoded inbound payload."
+        }
+      },
+      "required": [
+        "data"
+      ]
+    },
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/inbounds/pushClientTraffics",
+    "method": "POST",
+    "group": "Inbounds",
+    "summary": "Receive a master panel's aggregated per-client usage, keyed by the master's GUID. Stored in a side table used only for the UI display overlay and local quota enforcement — never folded into the local counters that masters poll, so delta accounting stays intact. Called panel-to-panel by the node traffic sync job.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "masterGuid": {
+          "type": "string",
+          "description": "Stable GUID of the pushing master panel."
+        },
+        "traffics": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "description": "Client traffic rows; only email/up/down are read."
+        }
+      },
+      "required": [
+        "masterGuid",
+        "traffics"
+      ]
+    },
+    "example": {
+      "masterGuid": "9f6c2d-…",
+      "traffics": [
+        {
+          "email": "alice",
+          "up": 1048576,
+          "down": 2097152
+        }
+      ]
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/inbounds/{id}/fallbacks",
+    "method": "GET",
+    "group": "Inbounds",
+    "summary": "List the fallback rules attached to a master VLESS/Trojan TCP-TLS inbound. Each rule links one child inbound (the dest) to optional SNI/ALPN/path/dest/xver match criteria. When dest is empty the child inbound's listen+port is used.",
+    "parameters": [
+      {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Master inbound ID.",
+        "schema": {
+          "type": "integer"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/inbounds/{id}/fallbacks",
+    "method": "POST",
+    "group": "Inbounds",
+    "summary": "Replace the entire fallback list for a master inbound. Body is JSON. Triggers an Xray restart.",
+    "parameters": [
+      {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Master inbound ID.",
+        "schema": {
+          "type": "integer"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "fallbacks": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "description": "Array of {childId, name, alpn, path, dest, xver, sortOrder} entries. Leave dest empty to auto-resolve from the child inbound's listen+port; set it (e.g. \"8443\", \"127.0.0.1:8443\", \"/dev/shm/x.sock\") to override."
+        }
+      },
+      "required": [
+        "fallbacks"
+      ]
+    },
+    "example": {
+      "fallbacks": [
+        {
+          "childId": 11,
+          "path": "/vlws",
+          "xver": 2
+        },
+        {
+          "childId": 12,
+          "alpn": "h2",
+          "dest": "8443"
+        }
+      ]
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/server/status",
+    "method": "GET",
+    "group": "Server",
+    "summary": "Real-time machine snapshot: CPU, memory, swap, disk, network IO, load averages, open connections, Xray state. Cached and refreshed every 2 seconds in the background.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/server/fail2banStatus",
+    "method": "GET",
+    "group": "Server",
+    "summary": "Reports whether per-client IP limits can be enforced on this host. The panel uses it to gate the \"IP Limit\" field, since enforcement depends on Fail2ban being installed.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/server/cpuHistory/{bucket}",
+    "method": "GET",
+    "group": "Server",
+    "summary": "Legacy: aggregated CPU history. Use /history/cpu/:bucket instead — same data with a uniform {t, v} shape.",
+    "parameters": [
+      {
+        "name": "bucket",
+        "in": "path",
+        "required": true,
+        "description": "Bucket size in seconds. Allowed: 2, 30, 60, 120, 180, 300.",
+        "schema": {
+          "type": "integer"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/server/history/{metric}/{bucket}",
+    "method": "GET",
+    "group": "Server",
+    "summary": "Aggregated time-series for one metric. Returns an array of {t, v} samples covering the last ~6 hours.",
+    "parameters": [
+      {
+        "name": "metric",
+        "in": "path",
+        "required": true,
+        "description": "cpu | mem | netUp | netDown | online | load1 | load5 | load15.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      {
+        "name": "bucket",
+        "in": "path",
+        "required": true,
+        "description": "Bucket size in seconds. Allowed: 2, 30, 60, 120, 180, 300.",
+        "schema": {
+          "type": "integer"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/server/xrayMetricsState",
+    "method": "GET",
+    "group": "Server",
+    "summary": "Xray runtime metrics state — whether the xray config has a `metrics` block, which expvar keys are flowing, and the current snapshot values for each. Returns an empty state when metrics are not configured.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/server/xrayMetricsHistory/{metric}/{bucket}",
+    "method": "GET",
+    "group": "Server",
+    "summary": "Time-series history for one Xray runtime metric over the last ~6 hours. Same {t, v} shape as /history/:metric/:bucket.",
+    "parameters": [
+      {
+        "name": "metric",
+        "in": "path",
+        "required": true,
+        "description": "xrAlloc | xrSys | xrHeapObjects | xrNumGC | xrPauseNs.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      {
+        "name": "bucket",
+        "in": "path",
+        "required": true,
+        "description": "Bucket size in seconds. Allowed: 2, 30, 60, 120, 180, 300.",
+        "schema": {
+          "type": "integer"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/server/xrayObservatory",
+    "method": "GET",
+    "group": "Server",
+    "summary": "Latest snapshot from the Xray observatory — per-outbound latency, health status, and last-probe time. Only populated when the Xray config has an observatory configured.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/server/xrayObservatoryHistory/{tag}/{bucket}",
+    "method": "GET",
+    "group": "Server",
+    "summary": "Time-series of observatory probe results for one outbound tag. Same {t, v} shape as the other history endpoints.",
+    "parameters": [
+      {
+        "name": "tag",
+        "in": "path",
+        "required": true,
+        "description": "Outbound tag from the observatory config.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      {
+        "name": "bucket",
+        "in": "path",
+        "required": true,
+        "description": "Bucket size in seconds. Allowed: 2, 30, 60, 120, 180, 300.",
+        "schema": {
+          "type": "integer"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/server/getXrayVersion",
+    "method": "GET",
+    "group": "Server",
+    "summary": "List Xray binary versions available for install on this host.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/server/getPanelUpdateInfo",
+    "method": "GET",
+    "group": "Server",
+    "summary": "Check whether a newer 3x-ui release is available on GitHub.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/server/getUpdateStatus",
+    "method": "GET",
+    "group": "Server",
+    "summary": "Report the outcome of the most recently launched panel self-update (see POST updatePanel). Compare the returned runId against the one updatePanel returned to tell this run apart from a stale result.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/server/getConfigJson",
+    "method": "GET",
+    "group": "Server",
+    "summary": "Return the assembled Xray config that’s currently running on this host.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/server/getDb",
+    "method": "GET",
+    "group": "Server",
+    "summary": "Stream a full database backup as an attachment: the SQLite .db file on SQLite panels, or a pg_dump custom-format archive (.dump) on PostgreSQL panels. Use as a manual backup.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/server/getMigration",
+    "method": "GET",
+    "group": "Server",
+    "summary": "Stream a cross-engine migration file as an attachment: a .dump (SQL text) on SQLite, or a .db SQLite database built from the live data on PostgreSQL.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/server/getNewUUID",
+    "method": "GET",
+    "group": "Server",
+    "summary": "Generate a fresh UUID v4. Convenience helper for client IDs.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/server/getWebCertFiles",
+    "method": "GET",
+    "group": "Server",
+    "summary": "Return this panel's own web TLS certificate and key file paths. The central panel calls it on a node (via the node API token) so \"Set Cert from Panel\" fills a node-assigned inbound with paths that exist on the node.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/server/descendants",
+    "method": "GET",
+    "group": "Server",
+    "summary": "Read-only summaries (guid, parentGuid, name, address, status, versions) of the nodes this panel manages. A parent panel calls it on a node (via the node API token) to surface transitive sub-nodes in a chained topology. Counts are computed by the parent, not returned here.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/server/getNewX25519Cert",
+    "method": "GET",
+    "group": "Server",
+    "summary": "Generate a new X25519 keypair for Reality.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/server/getNewmldsa65",
+    "method": "GET",
+    "group": "Server",
+    "summary": "Generate a new ML-DSA-65 keypair. Returns {seed, verify}.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/server/getNewmlkem768",
+    "method": "GET",
+    "group": "Server",
+    "summary": "Generate a new ML-KEM-768 keypair. Returns {seed, client}.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/server/getNewVlessEnc",
+    "method": "GET",
+    "group": "Server",
+    "summary": "Generate VLESS encryption auth options. Returns an auths array each with id, label, encryption, and decryption fields.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/server/stopXrayService",
+    "method": "POST",
+    "group": "Server",
+    "summary": "Stop the Xray binary. All proxies go offline immediately.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/server/restartXrayService",
+    "method": "POST",
+    "group": "Server",
+    "summary": "Reload Xray with the current config. Typically required after structural inbound or routing changes.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/server/installXray/{version}",
+    "method": "POST",
+    "group": "Server",
+    "summary": "Download and install the specified Xray version. Pass \"latest\" for the newest release.",
+    "parameters": [
+      {
+        "name": "version",
+        "in": "path",
+        "required": true,
+        "description": "Xray tag (e.g. v25.10.31) or \"latest\".",
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/server/updatePanel",
+    "method": "POST",
+    "group": "Server",
+    "summary": "Self-update the panel to the latest version. The server restarts on success.",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "dev": {
+          "type": "boolean",
+          "description": "Override this run's channel. Omit to use the panel's configured channel."
+        }
+      }
+    },
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/server/setUpdateChannel",
+    "method": "POST",
+    "group": "Server",
+    "summary": "Toggle the panel update channel between stable and the rolling per-commit dev release. Only effective on dev builds.",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "dev": {
+          "type": "boolean",
+          "description": "true = dev channel, false = stable."
+        }
+      },
+      "required": [
+        "dev"
+      ]
+    },
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/server/updateGeofile",
+    "method": "POST",
+    "group": "Server",
+    "summary": "Refresh the default GeoIP / GeoSite data files. Use the /:fileName variant to update one file.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/server/updateGeofile/{fileName}",
+    "method": "POST",
+    "group": "Server",
+    "summary": "Refresh a single Geo file by filename (e.g. geoip.dat, geosite.dat).",
+    "parameters": [
+      {
+        "name": "fileName",
+        "in": "path",
+        "required": true,
+        "description": "Filename of the data file to refresh.",
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/server/logs/{count}",
+    "method": "POST",
+    "group": "Server",
+    "summary": "Return the last N lines of the panel’s own log.",
+    "parameters": [
+      {
+        "name": "count",
+        "in": "path",
+        "required": true,
+        "description": "Number of trailing log lines.",
+        "schema": {
+          "type": "integer"
+        }
+      }
+    ],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "level": {
+          "type": "string",
+          "description": "Minimum log level filter."
+        },
+        "syslog": {
+          "type": "boolean",
+          "description": "Read system logs instead of the panel log."
+        }
+      }
+    },
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/server/xraylogs/{count}",
+    "method": "POST",
+    "group": "Server",
+    "summary": "Return the last N lines of the Xray process log.",
+    "parameters": [
+      {
+        "name": "count",
+        "in": "path",
+        "required": true,
+        "description": "Number of trailing log lines.",
+        "schema": {
+          "type": "integer"
+        }
+      }
+    ],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "filter": {
+          "type": "string",
+          "description": "Keyword filter — only lines containing this string."
+        },
+        "showDirect": {
+          "type": "string",
+          "description": "\"true\" to include direct (freedom) traffic lines."
+        },
+        "showBlocked": {
+          "type": "string",
+          "description": "\"true\" to include blocked (blackhole) traffic lines."
+        },
+        "showProxy": {
+          "type": "string",
+          "description": "\"true\" to include proxy traffic lines."
+        }
+      }
+    },
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/server/amneziawglogs/{count}",
+    "method": "POST",
+    "group": "Server",
+    "summary": "Return live AmneziaWG peer activity (handshake, endpoint, transfer) plus the panel’s own AmneziaWG event lines.",
+    "parameters": [
+      {
+        "name": "count",
+        "in": "path",
+        "required": true,
+        "description": "Maximum peer rows and event lines to return.",
+        "schema": {
+          "type": "integer"
+        }
+      }
+    ],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "filter": {
+          "type": "string",
+          "description": "Keyword filter — only rows/lines containing this string."
+        }
+      }
+    },
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/server/importDB",
+    "method": "POST",
+    "group": "Server",
+    "summary": "Restore the panel DB from an uploaded backup (multipart form, field name \"db\"). SQLite panels accept a SQLite database (.db) or a SQLite migration dump (.dump); PostgreSQL panels accept a pg_dump archive (.dump), a SQLite database (.db), or a SQLite migration dump. The panel restarts after restore. Destructive.",
+    "parameters": [],
+    "encoding": "multipart/form-data",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "db": {
+          "type": "string",
+          "format": "binary",
+          "description": "Database backup or migration file to upload."
+        },
+        "keepHostSettings": {
+          "type": "boolean",
+          "default": true,
+          "description": "Keep this machine's addresses, certificates and node identity. Default true."
+        }
+      },
+      "required": [
+        "db"
+      ]
+    },
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/server/getNewEchCert",
+    "method": "POST",
+    "group": "Server",
+    "summary": "Generate a new ECH (Encrypted Client Hello) keypair and config list for the given SNI.",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "sni": {
+          "type": "string",
+          "description": "Server Name Indication to generate the ECH config for."
+        }
+      },
+      "required": [
+        "sni"
+      ]
+    },
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/server/getCertHash",
+    "method": "POST",
+    "group": "Server",
+    "summary": "Compute the hex SHA-256 of a certificate (DER) for pinning (pinnedPeerCertSha256). Provide either a server file path or inline PEM/DER content.",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "certFile": {
+              "type": "string",
+              "pattern": ".*\\S.*",
+              "description": "Path to a certificate file on the server. Takes precedence over certContent."
+            },
+            "certContent": {
+              "type": "string",
+              "description": "Inline PEM (or DER) certificate content, used when certFile is empty."
+            }
+          },
+          "required": [
+            "certFile"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "certFile": {
+              "type": "string",
+              "description": "Path to a certificate file on the server. Takes precedence over certContent."
+            },
+            "certContent": {
+              "type": "string",
+              "pattern": ".*\\S.*",
+              "description": "Inline PEM (or DER) certificate content, used when certFile is empty."
+            }
+          },
+          "required": [
+            "certContent"
+          ]
+        }
+      ]
+    },
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/server/getRemoteCertHash",
+    "method": "POST",
+    "group": "Server",
+    "summary": "Run `xray tls ping` against a remote server and return its live leaf-certificate SHA-256 hash(es) for pinning (pinnedPeerCertSha256).",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "server": {
+          "type": "string",
+          "description": "Remote server as domain or domain:port (default port 443), e.g. cloudflare-dns.com."
+        }
+      },
+      "required": [
+        "server"
+      ]
+    },
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/server/scanRealityTarget",
+    "method": "POST",
+    "group": "Server",
+    "summary": "Run a live TLS 1.3 probe against a candidate REALITY target and return a feasibility verdict (TLS 1.3 + h2 + X25519 + trusted certificate) plus the certificate SAN DNS names. A target on a private/loopback address is reported with privateTarget=true and probed only when allowPrivate is set.",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "target": {
+          "type": "string",
+          "description": "Candidate target as host or host:port (default port 443), e.g. www.cloudflare.com:443."
+        },
+        "sni": {
+          "type": "string",
+          "description": "SNI the handshake sends and the certificate is verified against (the inbound serverNames). Defaults to the target host, which a fronting proxy answers with its default certificate."
+        },
+        "xver": {
+          "type": "integer",
+          "description": "PROXY protocol version the target expects (matches the inbound xver). 0 = none."
+        },
+        "allowPrivate": {
+          "type": "boolean",
+          "description": "Probe a private/internal/loopback target (LAN, Docker service name). Default false (SSRF guard blocks it and the response sets privateTarget=true)."
+        }
+      },
+      "required": [
+        "target"
+      ]
+    },
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/server/scanRealityTargets",
+    "method": "POST",
+    "group": "Server",
+    "summary": "Probe/discover REALITY targets and return each verdict ranked by feasibility then latency. Each comma-separated token may be a domain (validated with SNI), a bare IP, or a CIDR range (discovered without SNI by reading the certificate domain). When empty, the realityScanCandidates setting is probed (the built-in seed list if that setting is empty).",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "targets": {
+          "type": "string",
+          "description": "Optional comma-separated tokens: domain[:port], IP[:port], or CIDR (e.g. 104.16.0.0/24). When omitted, the realityScanCandidates setting is probed (the built-in seed list if that setting is empty)."
+        }
+      }
+    },
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/server/clientIps",
+    "method": "GET",
+    "group": "Server",
+    "summary": "Fetch the fully aggregated inbound_client_ips database table. Used by nodes to sync recently active IPs across the cluster.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/server/clientIps",
+    "method": "POST",
+    "group": "Server",
+    "summary": "Submit a list of recently active IP timestamps. The panel merges them with the existing database to maintain a unified global IP-limit view.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "clientEmail": {
+            "type": "string"
+          },
+          "ips": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "object",
+              "properties": {
+                "ip": {
+                  "type": "string"
+                },
+                "timestamp": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "ip",
+                "timestamp"
+              ]
+            }
+          }
+        },
+        "required": [
+          "clientEmail",
+          "ips"
+        ]
+      }
+    },
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/list",
+    "method": "GET",
+    "group": "Clients",
+    "summary": "List every client with its attached inbound IDs and traffic record. The reverse field, if set, is returned as a nested JSON object (legacy JSON-encoded-string form is still accepted on write).",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/list/paged",
+    "method": "GET",
+    "group": "Clients",
+    "summary": "Filter, sort, and paginate clients on the server. Each item is a slim row (no uuid/password/auth/flow/security/reverse/tgId) so the clients page can ship 25-ish rows in a few KB instead of the full table. The response also includes a summary computed across the full DB row set so dashboard counters stay stable as the user paginates or filters: the *Count fields are exact, while the email arrays beside them stop at 200 entries so the payload does not grow with the panel. Page size capped at 200; fetch /get/:email to obtain the full per-client payload for an edit/info modal.",
+    "parameters": [
+      {
+        "name": "page",
+        "in": "query",
+        "required": false,
+        "description": "1-indexed page number. Defaults to 1.",
+        "schema": {
+          "type": "integer",
+          "default": 1
+        }
+      },
+      {
+        "name": "pageSize",
+        "in": "query",
+        "required": false,
+        "description": "Rows per page. Defaults to 25, capped at 200.",
+        "schema": {
+          "type": "integer",
+          "default": 25
+        }
+      },
+      {
+        "name": "search",
+        "in": "query",
+        "required": false,
+        "description": "Case-insensitive substring match on email, subId, comment, UUID, password, auth or Telegram ID.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      {
+        "name": "filter",
+        "in": "query",
+        "required": false,
+        "description": "CSV status buckets: online, active, deactive, depleted or expiring. Values are ORed.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      {
+        "name": "protocol",
+        "in": "query",
+        "required": false,
+        "description": "CSV inbound protocols: vmess, vless, trojan, shadowsocks, wireguard, hysteria, http, mixed, tunnel, tun, mtproto or amneziawg. Values are ORed.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      {
+        "name": "inbound",
+        "in": "query",
+        "required": false,
+        "description": "CSV positive inbound IDs. Values are ORed; invalid or non-positive IDs are ignored.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      {
+        "name": "sort",
+        "in": "query",
+        "required": false,
+        "description": "Sort key. An omitted or unknown value falls back to client ID ascending.",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "enable",
+            "email",
+            "inboundIds",
+            "traffic",
+            "remaining",
+            "expiryTime",
+            "createdAt",
+            "updatedAt",
+            "lastOnline"
+          ]
+        }
+      },
+      {
+        "name": "order",
+        "in": "query",
+        "required": false,
+        "description": "Sort direction. Only descend selects descending order; otherwise ascending.",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "ascend",
+            "descend"
+          ]
+        }
+      },
+      {
+        "name": "expiryFrom",
+        "in": "query",
+        "required": false,
+        "description": "Inclusive minimum expiry time in Unix milliseconds. Zero or negative means unset.",
+        "schema": {
+          "type": "integer"
+        }
+      },
+      {
+        "name": "expiryTo",
+        "in": "query",
+        "required": false,
+        "description": "Inclusive maximum expiry time in Unix milliseconds. Zero or negative means unbounded.",
+        "schema": {
+          "type": "integer"
+        }
+      },
+      {
+        "name": "usageFrom",
+        "in": "query",
+        "required": false,
+        "description": "Inclusive minimum combined upload and download usage in bytes. Zero means unset.",
+        "schema": {
+          "type": "integer"
+        }
+      },
+      {
+        "name": "usageTo",
+        "in": "query",
+        "required": false,
+        "description": "Inclusive maximum combined upload and download usage in bytes. Zero means unbounded.",
+        "schema": {
+          "type": "integer"
+        }
+      },
+      {
+        "name": "autoRenew",
+        "in": "query",
+        "required": false,
+        "description": "on selects clients with an interval or calendar-day reset; off selects clients without either.",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "on",
+            "off"
+          ]
+        }
+      },
+      {
+        "name": "hasTgId",
+        "in": "query",
+        "required": false,
+        "description": "yes selects clients with a non-zero Telegram ID; no selects clients without one.",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "yes",
+            "no"
+          ]
+        }
+      },
+      {
+        "name": "hasComment",
+        "in": "query",
+        "required": false,
+        "description": "yes selects clients with a non-blank comment; no selects clients without one.",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "yes",
+            "no"
+          ]
+        }
+      },
+      {
+        "name": "group",
+        "in": "query",
+        "required": false,
+        "description": "CSV group names, matched case-insensitively after trimming. Values are ORed.",
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/get/{email}",
+    "method": "GET",
+    "group": "Clients",
+    "summary": "Fetch one client by email, including the inbound IDs and external config IDs it is attached to.",
+    "parameters": [
+      {
+        "name": "email",
+        "in": "path",
+        "required": true,
+        "description": "Client email (unique identifier).",
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/get/tgId/{tgId}",
+    "method": "GET",
+    "group": "Clients",
+    "summary": "Fetch clients by Telegram user ID. Returns an array since multiple clients can share the same Telegram ID.",
+    "parameters": [
+      {
+        "name": "tgId",
+        "in": "path",
+        "required": true,
+        "description": "Telegram user ID (numeric).",
+        "schema": {
+          "type": "integer"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/add",
+    "method": "POST",
+    "group": "Clients",
+    "summary": "Create a new client and attach it to one or more inbounds in a single call. Body is JSON. Per-protocol secrets are generated server-side when omitted, so callers can send only the universal fields.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "client": {
+          "type": "object",
+          "description": "Client fields: email, subId, id (uuid), password, auth, flow, totalGB, expiryTime, limitIp, limitHwid, tgId (numeric Telegram user ID, 0 = none), comment, enable. Protocol-specific: secret and adTag (mtproto), privateKey, publicKey, preSharedKey, allowedIPs and keepAlive (WireGuard)."
+        },
+        "inboundIds": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "description": "Inbound IDs to attach the client to. At least one required."
+        }
+      },
+      "required": [
+        "client",
+        "inboundIds"
+      ]
+    },
+    "example": {
+      "client": {
+        "email": "alice@example.com",
+        "totalGB": 53687091200,
+        "expiryTime": 1735689600000,
+        "tgId": 0,
+        "limitIp": 0,
+        "limitHwid": 0,
+        "enable": true
+      },
+      "inboundIds": [
+        3,
+        5
+      ]
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/renewalPreview",
+    "method": "POST",
+    "group": "Clients",
+    "summary": "Preview client auto-renewal dates without saving or resetting anything.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "expiryTime": {
+          "type": "integer",
+          "description": "Current cutoff in Unix milliseconds; 0 unlimited, negative first-use duration."
+        },
+        "reset": {
+          "type": "integer",
+          "description": "Fixed interval in days; 0 disabled."
+        },
+        "resetDay": {
+          "type": "integer",
+          "description": "Monthly calendar day 1-31; 0 disabled."
+        },
+        "resetWeekday": {
+          "type": "integer",
+          "description": "Weekly calendar day 1-7 (Monday-Sunday); 0 disabled."
+        },
+        "resetMax": {
+          "type": "integer",
+          "description": "Maximum renewals; 0 unlimited."
+        },
+        "resetCount": {
+          "type": "integer",
+          "description": "Renewals already consumed; defaults to 0."
+        }
+      },
+      "required": [
+        "expiryTime",
+        "reset",
+        "resetDay",
+        "resetWeekday",
+        "resetMax",
+        "resetCount"
+      ]
+    },
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/update/{email}",
+    "method": "POST",
+    "group": "Clients",
+    "summary": "Update an existing client by email. Changes propagate to every attached inbound. Body is the JSON client payload — supply the full set of fields you want to keep (the server replaces the row, it does not patch).",
+    "parameters": [
+      {
+        "name": "email",
+        "in": "path",
+        "required": true,
+        "description": "Current client email (unique identifier).",
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object"
+    },
+    "example": {
+      "email": "alice@example.com",
+      "totalGB": 107374182400,
+      "expiryTime": 1767225600000,
+      "limitHwid": 2,
+      "tgId": 123456789,
+      "enable": true
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/del/{email}",
+    "method": "POST",
+    "group": "Clients",
+    "summary": "Delete a client by email. Removes it from every attached inbound and drops its traffic record unless keepTraffic=1 is passed.",
+    "parameters": [
+      {
+        "name": "email",
+        "in": "path",
+        "required": true,
+        "description": "Client email (unique identifier).",
+        "schema": {
+          "type": "string"
+        }
+      },
+      {
+        "name": "keepTraffic",
+        "in": "query",
+        "required": true,
+        "description": "Pass 1 to retain the xray_client_traffic row after deletion.",
+        "schema": {
+          "type": "integer"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/{email}/attach",
+    "method": "POST",
+    "group": "Clients",
+    "summary": "Attach an existing client to one or more additional inbounds. Body is JSON.",
+    "parameters": [
+      {
+        "name": "email",
+        "in": "path",
+        "required": true,
+        "description": "Client email (unique identifier).",
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "inboundIds": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "description": "Inbound IDs to attach."
+        }
+      },
+      "required": [
+        "inboundIds"
+      ]
+    },
+    "example": {
+      "inboundIds": [
+        7,
+        9
+      ]
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/{email}/detach",
+    "method": "POST",
+    "group": "Clients",
+    "summary": "Detach a client from one or more inbounds without deleting the client.",
+    "parameters": [
+      {
+        "name": "email",
+        "in": "path",
+        "required": true,
+        "description": "Client email (unique identifier).",
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "inboundIds": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "description": "Inbound IDs to detach."
+        }
+      },
+      "required": [
+        "inboundIds"
+      ]
+    },
+    "example": {
+      "inboundIds": [
+        5
+      ]
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/{email}/externalLinks",
+    "method": "POST",
+    "group": "Clients",
+    "summary": "Replace a client's external links and external subscriptions. Sends the full set; the server replaces all rows. Disabled rows stay saved for editing but are not emitted in generated subscriptions. The owning client's disabled or expired state also stops these rows from being emitted on future subscription fetches; credentials already imported by an app remain valid until the external provider revokes them.",
+    "parameters": [
+      {
+        "name": "email",
+        "in": "path",
+        "required": true,
+        "description": "Client email (unique identifier).",
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "externalLinks": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "description": "Full replacement list; the server replaces all rows. Each row supports { kind, value, remark, enable, expiryTime, namePrefix }. kind=link: value must be a supported share link such as vless://, vmess://, trojan://, ss://, hysteria2://, or wireguard://, and remark overrides the exported node name. kind=subscription: value must be an http(s) subscription URL, and namePrefix is prepended to fetched node names. Omit enable to default true; enable=false or an expired expiryTime keeps the row saved but excludes it from generated subscriptions. expiryTime is a unix millisecond timestamp where 0 means no link-specific expiry; the owning client's enabled state and expiry still apply. A negative value is rejected. Rows are matched by kind+value across saves, so id is ignored on write. lastFetchAt and lastFetchError are read-only status fields returned by GET."
+        }
+      },
+      "required": [
+        "externalLinks"
+      ]
+    },
+    "example": {
+      "externalLinks": [
+        {
+          "kind": "link",
+          "value": "vless://uuid@host:443?...#srv",
+          "remark": "DE",
+          "enable": true,
+          "expiryTime": 0
+        },
+        {
+          "kind": "subscription",
+          "value": "https://provider.example/sub/abc",
+          "remark": "Provider",
+          "enable": false,
+          "expiryTime": 1767225600000,
+          "namePrefix": "[zjh] "
+        }
+      ]
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/resetAllTraffics",
+    "method": "POST",
+    "group": "Clients",
+    "summary": "Reset the up/down counters for every client globally. Quotas and expiry are not affected. Triggers an Xray restart if any counter actually moved.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/delDepleted",
+    "method": "POST",
+    "group": "Clients",
+    "summary": "Delete every client whose traffic quota is exhausted (used >= total, when reset is disabled) or whose expiry has passed. Returns the deleted count and triggers an Xray restart when any client was on a running inbound.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/delOrphans",
+    "method": "POST",
+    "group": "Clients",
+    "summary": "Delete every client that is not attached to any inbound, along with its traffic record, IP log, HWID devices, and external links. Useful for clearing clients left unattached after their inbounds were removed. Returns the deleted count. Cannot be undone.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/export",
+    "method": "GET",
+    "group": "Clients",
+    "summary": "Return every client as a {client, inboundIds, traffic} array — the shape /import accepts — so the payload round-trips straight back through /import. traffic carries the usage counters (up, down, resetCount, lastOnline, lastSubFetch) and is omitted for a client with no traffic row; the quota itself stays in client.totalGB. Clients with no inbound attachment are included with an empty inboundIds list. The UI shows this in a CodeMirror viewer (copy / download); programmatic callers get the array in obj.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/import",
+    "method": "POST",
+    "group": "Clients",
+    "summary": "Import clients from a JSON body { \"data\": \"<json>\" }, where data is a string-encoded array produced by /export ([{client, inboundIds, traffic}]). Items with inboundIds are created and attached to those inbounds; items with an empty inboundIds list are restored as unattached client records. An optional traffic object restores the usage counters, only for clients this import creates. Existing emails are never overwritten — they are returned in skipped, and their live counters are left untouched. Triggers a single Xray restart at the end if any target inbound was running; a failure while restoring counters still reports success=false after the clients were created.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object"
+    },
+    "example": {
+      "data": "[{\"client\":{\"email\":\"alice@example.com\",\"enable\":true},\"inboundIds\":[7]}]"
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/bulkAdjust",
+    "method": "POST",
+    "group": "Clients",
+    "summary": "Shift expiry and/or traffic quota for many clients in one call. addDays/addBytes may be negative. Clients with unlimited expiry (expiryTime=0) or unlimited traffic (totalGB=0) are skipped for the corresponding field — bulk extend never converts unlimited to limited. A client that was auto-disabled solely because it was depleted (expired or over quota) is automatically re-enabled — locally and on its node — when the adjustment lifts it out of depletion; a manually-disabled or still-depleted client is left disabled. The optional flow directive sets the XTLS flow on every client: \"none\" clears it, \"xtls-rprx-vision\"/\"xtls-rprx-vision-udp443\" set it where the inbound supports it (omit or \"\" to leave it unchanged). The optional limitHwid sets maximum registered devices (0 = unlimited). The optional adTag sets MTProto Telegram sponsor channel (\"none\" clears). Returns the adjusted count and per-email skip reasons.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object"
+    },
+    "example": {
+      "emails": [
+        "alice",
+        "bob"
+      ],
+      "addDays": 30,
+      "addBytes": 53687091200,
+      "flow": "xtls-rprx-vision",
+      "limitHwid": 2,
+      "adTag": "0123456789abcdef0123456789abcdef"
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/bulkEnable",
+    "method": "POST",
+    "group": "Clients",
+    "summary": "Enable many clients in one call. Emails are grouped by inbound and applied with a single read-modify-write per inbound; the running Xray (local or remote node) is updated to add each user. Note that enabling a client whose quota is exhausted or whose expiry has passed only flips the flag — the traffic loop will disable it again on the next tick. Returns the changed count and per-email skip reasons.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object"
+    },
+    "example": {
+      "emails": [
+        "alice",
+        "bob"
+      ]
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/bulkDisable",
+    "method": "POST",
+    "group": "Clients",
+    "summary": "Disable many clients in one call. Emails are grouped by inbound and applied with a single read-modify-write per inbound; the running Xray (local or remote node) is updated to remove each user. Returns the changed count and per-email skip reasons.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object"
+    },
+    "example": {
+      "emails": [
+        "alice",
+        "bob"
+      ]
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/bulkDel",
+    "method": "POST",
+    "group": "Clients",
+    "summary": "Delete many clients in one call. The server processes the list sequentially so each delete sees the committed state of the previous one — avoids the race the per-email fan-out had on the panel side. Pass keepTraffic=true to retain the xray_client_traffic rows after deletion.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object"
+    },
+    "example": {
+      "emails": [
+        "alice",
+        "bob"
+      ],
+      "keepTraffic": false
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/bulkCreate",
+    "method": "POST",
+    "group": "Clients",
+    "summary": "Create many clients in one call. Body is a JSON array of {client, inboundIds} payloads — the same shape /add accepts. Items are processed sequentially; per-email skip reasons are returned for items that fail (e.g., duplicate email). Triggers a single Xray restart at the end if any inbound was running.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object"
+    },
+    "example": [
+      {
+        "client": {
+          "email": "alice@example.com",
+          "totalGB": 53687091200,
+          "expiryTime": 0,
+          "limitHwid": 2,
+          "enable": true
+        },
+        "inboundIds": [
+          7
+        ]
+      },
+      {
+        "client": {
+          "email": "bob@example.com",
+          "totalGB": 53687091200,
+          "expiryTime": 0,
+          "limitHwid": 0,
+          "enable": true
+        },
+        "inboundIds": [
+          7,
+          9
+        ]
+      }
+    ],
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/groups/bulkAdd",
+    "method": "POST",
+    "group": "Clients",
+    "summary": "Add many clients to a group in one call. Updates clients.group_name and patches the matching client entry inside every owning inbound's settings JSON in a single transaction. If the group name does not yet exist (in client_groups or as a derived label), it is auto-created as a persistent group. To clear the group label, use /groups/bulkRemove instead.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object"
+    },
+    "example": {
+      "emails": [
+        "alice",
+        "bob"
+      ],
+      "group": "customer-a"
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/groups/bulkRemove",
+    "method": "POST",
+    "group": "Clients",
+    "summary": "Clear the group label on many clients in one call. Inverse of /groups/bulkAdd. Clients themselves are kept — only the group label is cleared from clients.group_name and from each owning inbound's settings JSON. Groups become empty if all their members are removed.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object"
+    },
+    "example": {
+      "emails": [
+        "alice",
+        "bob"
+      ]
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/bulkAttach",
+    "method": "POST",
+    "group": "Clients",
+    "summary": "Attach many existing clients to many inbounds in one call. Each client keeps its identity (email/UUID/password/subId) and a shared traffic row; all clients are added to a target inbound in a single AddInboundClient call. Clients already present on a target are reported under skipped. Returns per-email attached/skipped/errors lists and triggers a single Xray restart if any target inbound was running.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "emails": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Emails of existing clients to attach."
+        },
+        "inboundIds": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "description": "Target inbound IDs to attach every client to."
+        }
+      },
+      "required": [
+        "emails",
+        "inboundIds"
+      ]
+    },
+    "example": {
+      "emails": [
+        "alice",
+        "bob"
+      ],
+      "inboundIds": [
+        7,
+        9
+      ]
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/bulkDetach",
+    "method": "POST",
+    "group": "Clients",
+    "summary": "Mirror of bulkAttach: detach many existing clients from many inbounds in one call. For each email, intersects the client's current inbounds with the requested set and detaches from those only; (email, inbound) pairs where the client is not currently attached are silently no-ops. Emails not attached to any of the requested inbounds are reported under skipped. Client records are kept even if they become orphaned — use bulkDel for full removal. Returns per-email detached/skipped/errors lists and triggers a single Xray restart if any target inbound was running.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "emails": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Emails of existing clients to detach."
+        },
+        "inboundIds": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "description": "Inbound IDs to detach the clients from."
+        }
+      },
+      "required": [
+        "emails",
+        "inboundIds"
+      ]
+    },
+    "example": {
+      "emails": [
+        "alice",
+        "bob"
+      ],
+      "inboundIds": [
+        7,
+        9
+      ]
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/bulkResetTraffic",
+    "method": "POST",
+    "group": "Clients",
+    "summary": "Zero up/down counters for many clients in one call. Loops the single-reset path so each client is re-enabled across its attached inbounds and pushed to Xray/remote nodes. Returns the count of successfully reset clients.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object"
+    },
+    "example": {
+      "emails": [
+        "alice",
+        "bob"
+      ]
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/groups",
+    "method": "GET",
+    "group": "Clients",
+    "summary": "List all client groups with their member counts. Merges persisted groups (rows in client_groups, including empty placeholders) with the distinct group_name values currently set on clients. Sorted alphabetically (case-insensitive).",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/groups/{name}/emails",
+    "method": "GET",
+    "group": "Clients",
+    "summary": "Return just the email list of clients that currently belong to the given group. Useful for fanning a single bulk action over an entire group without round-tripping the full client list.",
+    "parameters": [
+      {
+        "name": "name",
+        "in": "path",
+        "required": true,
+        "description": "Group name (URL-encoded).",
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/groups/create",
+    "method": "POST",
+    "group": "Clients",
+    "summary": "Create a new empty (placeholder) group. The group becomes selectable in client forms and the filter drawer even before any client is added to it. Errors if a group with the same name already exists.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object"
+    },
+    "example": {
+      "name": "customer-a"
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/groups/rename",
+    "method": "POST",
+    "group": "Clients",
+    "summary": "Rename a group. The new name is applied to the client_groups row AND propagated to every matching client (both clients.group_name and the client entry inside every owning inbound's settings JSON) in a single transaction. Returns the number of clients whose label was updated.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object"
+    },
+    "example": {
+      "oldName": "customer-a",
+      "newName": "tier-1"
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/groups/delete",
+    "method": "POST",
+    "group": "Clients",
+    "summary": "Remove a group. Deletes the client_groups row and clears the group label from every matching client (both clients.group_name and the inbound settings JSON). The clients themselves are NOT deleted — use /bulkDel after filtering by group for that. Returns the count of clients whose label was cleared.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object"
+    },
+    "example": {
+      "name": "customer-a"
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/groups/resetTraffic",
+    "method": "POST",
+    "group": "Clients",
+    "summary": "Reset only the group-level traffic counter shown on the groups page. Snapshots the current up/down sum of the group's members as a baseline so the group total reads zero, while leaving each client's own counters (and their quotas) untouched. No Xray restart is triggered. Creates the client_groups row if the group exists only as a derived label.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object"
+    },
+    "example": {
+      "name": "customer-a"
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/resetTraffic/{email}",
+    "method": "POST",
+    "group": "Clients",
+    "summary": "Zero out a single client’s up/down counters. Re-enables the client across every attached inbound and pushes the change to Xray (or the remote node) so depleted users can connect again immediately.",
+    "parameters": [
+      {
+        "name": "email",
+        "in": "path",
+        "required": true,
+        "description": "Client email.",
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/updateTraffic/{email}",
+    "method": "POST",
+    "group": "Clients",
+    "summary": "Manually adjust a client’s upload + download counters. Useful for migrations from external accounting systems.",
+    "parameters": [
+      {
+        "name": "email",
+        "in": "path",
+        "required": true,
+        "description": "Client email.",
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object"
+    },
+    "example": {
+      "upload": 1073741824,
+      "download": 5368709120
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/ips/{email}",
+    "method": "POST",
+    "group": "Clients",
+    "summary": "List source IPs that have connected with the given client’s credentials. Returns an array of \"ip (timestamp)\" strings.",
+    "parameters": [
+      {
+        "name": "email",
+        "in": "path",
+        "required": true,
+        "description": "Client email.",
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/clearIps/{email}",
+    "method": "POST",
+    "group": "Clients",
+    "summary": "Reset the recorded IP list for a client.",
+    "parameters": [
+      {
+        "name": "email",
+        "in": "path",
+        "required": true,
+        "description": "Client email.",
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/hwids/{email}",
+    "method": "POST",
+    "group": "Clients",
+    "summary": "List registered HWID devices for a client with a short fingerprint. Full hashes are not exposed.",
+    "parameters": [
+      {
+        "name": "email",
+        "in": "path",
+        "required": true,
+        "description": "Client email.",
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/hwids/{email}",
+    "method": "DELETE",
+    "group": "Clients",
+    "summary": "Clear all registered HWID devices for a client so new devices can register again.",
+    "parameters": [
+      {
+        "name": "email",
+        "in": "path",
+        "required": true,
+        "description": "Client email.",
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/hwids/{email}/{id}",
+    "method": "DELETE",
+    "group": "Clients",
+    "summary": "Remove a single registered HWID device by its id, freeing one slot under the HWID limit.",
+    "parameters": [
+      {
+        "name": "email",
+        "in": "path",
+        "required": true,
+        "description": "Client email.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Device id, from the list endpoint.",
+        "schema": {
+          "type": "integer"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/onlines",
+    "method": "POST",
+    "group": "Clients",
+    "summary": "List the emails of currently connected clients (last seen within the heartbeat window), deduped across every node.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/onlinesByGuid",
+    "method": "POST",
+    "group": "Clients",
+    "summary": "Online client emails grouped by the panelGuid of the node that physically hosts each client. The local panel uses its own GUID; each node (at any depth in a chain) uses its GUID. Lets the inbounds page attribute online status to the real node instead of the intermediate one it syncs through.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/clientIpsByGuid",
+    "method": "POST",
+    "group": "Clients",
+    "summary": "Per-client source IPs grouped by the panelGuid of the node that observed them. Lets the central panel attribute and enforce per-client IP limits using the real visitor IPs each node sees, instead of the address of the intermediate panel it syncs through.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/activeInbounds",
+    "method": "POST",
+    "group": "Clients",
+    "summary": "Inbound tags that carried traffic within the heartbeat window, grouped by the hosting node's panelGuid. Pairs with onlinesByGuid so the inbounds page only marks a multi-inbound client online on the inbounds it actually used. Nodes that do not report per-inbound activity are absent.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/lastOnline",
+    "method": "POST",
+    "group": "Clients",
+    "summary": "Map of client email → last-seen unix timestamp.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/traffic/{email}",
+    "method": "GET",
+    "group": "Clients",
+    "summary": "Traffic counters for a client identified by email.",
+    "parameters": [
+      {
+        "name": "email",
+        "in": "path",
+        "required": true,
+        "description": "Client email (unique across the panel).",
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/subLinks/{subId}",
+    "method": "GET",
+    "group": "Clients",
+    "summary": "Return every protocol URL (vless://, vmess://, trojan://, ss://, hysteria://, hy2://) for clients matching the subscription ID. Same result set as the configured subPath endpoint, but as a JSON array — no base64. When an inbound has streamSettings.externalProxy set, one URL is emitted per external proxy. Empty array when the subId has no enabled clients.",
+    "parameters": [
+      {
+        "name": "subId",
+        "in": "path",
+        "required": true,
+        "description": "Subscription ID, taken from the client's subId field.",
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/happLink/{id}",
+    "method": "POST",
+    "group": "Clients",
+    "summary": "Generate a fresh Happ crypt5 link locally from the current client subscription URL when Happ link generation is enabled. The panel applies a resource limit of 8192 UTF-8 bytes to the source URL; this is not a Happ client maximum. Longer sources return success: false with msg: happ_source_too_long and obj: null. The source URL is not sent to a generation provider, and the result is not stored or reused.",
+    "parameters": [
+      {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Stable client record ID.",
+        "schema": {
+          "type": "integer"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/clients/links/{email}",
+    "method": "GET",
+    "group": "Clients",
+    "summary": "Return every URL for one client across all attached inbounds, one per advertised endpoint: the managed hosts of the inbound, else its streamSettings.externalProxy entries, else its own address. Supported protocols: vmess, vless, trojan, shadowsocks, hysteria, mtproto. Protocols without a URL form (socks, http, mixed, wireguard, dokodemo, tunnel) contribute nothing.",
+    "parameters": [
+      {
+        "name": "email",
+        "in": "path",
+        "required": true,
+        "description": "Client email (unique identifier).",
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/nodes/list",
+    "method": "GET",
+    "group": "Nodes",
+    "summary": "List every configured node with its connection details, health, and last heartbeat patch.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/nodes/mtls/ca",
+    "method": "POST",
+    "group": "Nodes",
+    "summary": "This panel's node-auth CA certificate (public, PEM) to paste into a node's mTLS trust setting. Lazily mints the CA and the master client cert on first call. Pair with setting tlsVerifyMode=mtls on the node.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/nodes/mtls/trustCA",
+    "method": "POST",
+    "group": "Nodes",
+    "summary": "Set the CA certificate this panel trusts for incoming node-API client certificates (this panel acting as a node). Paste the managing panel's CA (from nodes/mtls/ca). An empty caCert disables it. A non-empty value must be a PEM certificate. Applied on the next panel restart.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object"
+    },
+    "example": {
+      "caCert": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n"
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/nodes/mtls/reloadClient",
+    "method": "POST",
+    "group": "Nodes",
+    "summary": "Validate the stored master mTLS client credential and invalidate cached transports. Each transport closes its old idle pool and rebuilds with the rotated certificate before its next request.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/nodes/get/{id}",
+    "method": "GET",
+    "group": "Nodes",
+    "summary": "Fetch a single node by ID.",
+    "parameters": [
+      {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Node ID.",
+        "schema": {
+          "type": "integer"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/nodes/webCert/{id}",
+    "method": "GET",
+    "group": "Nodes",
+    "summary": "Fetch a node's own web TLS certificate/key file paths (proxied to the node). Used by the inbound form's \"Set Cert from Panel\" so a node-assigned inbound gets paths that exist on the node, not the central panel.",
+    "parameters": [
+      {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Node ID.",
+        "schema": {
+          "type": "integer"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/nodes/add",
+    "method": "POST",
+    "group": "Nodes",
+    "summary": "Register a new remote node. Provide its URL, write-only apiToken, and optional remark / allowPrivateAddress flag. Responses expose hasApiToken only.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object"
+    },
+    "example": {
+      "name": "de-fra-1",
+      "remark": "",
+      "scheme": "https",
+      "address": "node1.example.com",
+      "port": 2053,
+      "basePath": "/",
+      "apiToken": "abcdef...",
+      "clearApiToken": false,
+      "enable": true,
+      "allowPrivateAddress": false
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/nodes/update/{id}",
+    "method": "POST",
+    "group": "Nodes",
+    "summary": "Replace a node’s connection details. apiToken is write-only: omit it or send an empty string to keep the stored token; set clearApiToken=true to clear it.",
+    "parameters": [
+      {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Node ID.",
+        "schema": {
+          "type": "integer"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object"
+    },
+    "example": {
+      "name": "de-fra-1",
+      "remark": "",
+      "scheme": "https",
+      "address": "node1.example.com",
+      "port": 2053,
+      "basePath": "/",
+      "apiToken": "",
+      "clearApiToken": false,
+      "enable": true,
+      "allowPrivateAddress": false
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/nodes/del/{id}",
+    "method": "POST",
+    "group": "Nodes",
+    "summary": "Delete a node. Inbounds bound to it are not auto-migrated.",
+    "parameters": [
+      {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Node ID.",
+        "schema": {
+          "type": "integer"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/nodes/setEnable/{id}",
+    "method": "POST",
+    "group": "Nodes",
+    "summary": "Pause or resume traffic sync with this node.",
+    "parameters": [
+      {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Node ID.",
+        "schema": {
+          "type": "integer"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object"
+    },
+    "example": {
+      "enable": true
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/nodes/test",
+    "method": "POST",
+    "group": "Nodes",
+    "summary": "Probe a node without saving it. Uses the body as connection details and returns the same heartbeat snapshot a registered node would have.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object"
+    },
+    "example": {
+      "scheme": "https",
+      "address": "node1.example.com",
+      "port": 2053,
+      "basePath": "/",
+      "apiToken": "abcdef..."
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/nodes/certFingerprint",
+    "method": "POST",
+    "group": "Nodes",
+    "summary": "Connect to the node over HTTPS without verifying its certificate and return the leaf certificate's SHA-256 (base64). Used by the Add/Edit Node dialog to fetch and pin a self-signed certificate. Uses the same body as /test.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object"
+    },
+    "example": {
+      "scheme": "https",
+      "address": "node1.example.com",
+      "port": 2053,
+      "basePath": "/"
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/nodes/inbounds",
+    "method": "POST",
+    "group": "Nodes",
+    "summary": "Use unsaved node connection details to list the remote inbounds available for selective import.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object"
+    },
+    "example": {
+      "name": "de-fra-1",
+      "scheme": "https",
+      "address": "node1.example.com",
+      "port": 2053,
+      "basePath": "/",
+      "apiToken": "abcdef..."
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/nodes/probe/{id}",
+    "method": "POST",
+    "group": "Nodes",
+    "summary": "Probe an existing node, updating its cached health state.",
+    "parameters": [
+      {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Node ID.",
+        "schema": {
+          "type": "integer"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/nodes/updatePanel",
+    "method": "POST",
+    "group": "Nodes",
+    "summary": "Trigger the official panel self-updater on each given node (downloads the latest release and restarts). Only enabled, online nodes are updated; offline/disabled ones are reported as skipped. Set \"dev\": true to move the nodes to the rolling per-commit dev channel instead of the latest stable release. Returns a per-node result list.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object"
+    },
+    "example": {
+      "ids": [
+        1,
+        2,
+        3
+      ],
+      "dev": false
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/nodes/history/{id}/{metric}/{bucket}",
+    "method": "GET",
+    "group": "Nodes",
+    "summary": "Aggregated metric history for a node — same shape as /server/history, scoped to one node.",
+    "parameters": [
+      {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Node ID.",
+        "schema": {
+          "type": "integer"
+        }
+      },
+      {
+        "name": "metric",
+        "in": "path",
+        "required": true,
+        "description": "cpu | mem.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      {
+        "name": "bucket",
+        "in": "path",
+        "required": true,
+        "description": "Bucket size in seconds. Allowed: 2, 30, 60, 120, 180, 300.",
+        "schema": {
+          "type": "integer"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/hosts/list",
+    "method": "GET",
+    "group": "Hosts",
+    "summary": "List every host across all inbounds, grouped by inbound then ordered by sort order.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/hosts/get/{groupId}",
+    "method": "GET",
+    "group": "Hosts",
+    "summary": "Fetch a single host group by Group ID.",
+    "parameters": [
+      {
+        "name": "groupId",
+        "in": "path",
+        "required": true,
+        "description": "Host Group ID.",
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/hosts/byInbound/{inboundId}",
+    "method": "GET",
+    "group": "Hosts",
+    "summary": "Fetch one inbound's hosts, grouped by host group.",
+    "parameters": [
+      {
+        "name": "inboundId",
+        "in": "path",
+        "required": true,
+        "description": "Inbound ID.",
+        "schema": {
+          "type": "integer"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/hosts/tags",
+    "method": "GET",
+    "group": "Hosts",
+    "summary": "Distinct, sorted set of tags used across all hosts.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/hosts/add",
+    "method": "POST",
+    "group": "Hosts",
+    "summary": "Create a host group on inbounds.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object"
+    },
+    "example": {
+      "inboundIds": [
+        1
+      ],
+      "remark": "cdn-front",
+      "hosts": [
+        "cdn.example.com"
+      ],
+      "port": 8443,
+      "security": "same",
+      "tags": [
+        "CDN"
+      ]
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/hosts/update/{groupId}",
+    "method": "POST",
+    "group": "Hosts",
+    "summary": "Replace a host group’s content.",
+    "parameters": [
+      {
+        "name": "groupId",
+        "in": "path",
+        "required": true,
+        "description": "Host Group ID.",
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object"
+    },
+    "example": {
+      "inboundIds": [
+        1
+      ],
+      "remark": "cdn-front",
+      "hosts": [
+        "cdn.example.com"
+      ],
+      "port": 8443,
+      "security": "same",
+      "tags": [
+        "CDN"
+      ]
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/hosts/del/{groupId}",
+    "method": "POST",
+    "group": "Hosts",
+    "summary": "Delete a host group.",
+    "parameters": [
+      {
+        "name": "groupId",
+        "in": "path",
+        "required": true,
+        "description": "Host Group ID.",
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/hosts/setEnable/{groupId}",
+    "method": "POST",
+    "group": "Hosts",
+    "summary": "Enable or disable a host group.",
+    "parameters": [
+      {
+        "name": "groupId",
+        "in": "path",
+        "required": true,
+        "description": "Host Group ID.",
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object"
+    },
+    "example": {
+      "enable": true
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/hosts/reorder",
+    "method": "POST",
+    "group": "Hosts",
+    "summary": "Set host group sort order by the position of each groupId in the array.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object"
+    },
+    "example": {
+      "ids": [
+        "abc-123",
+        "def-456"
+      ]
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/hosts/bulk/add",
+    "method": "POST",
+    "group": "Hosts",
+    "summary": "Add a host group to inbounds (same as /add).",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object"
+    },
+    "example": {
+      "inboundIds": [
+        1,
+        2
+      ],
+      "hosts": [
+        "cdn.example.com",
+        "cdn2.example.com:443"
+      ],
+      "remark": "Cloudflare CDN",
+      "port": 0,
+      "security": "same",
+      "isDisabled": false
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/hosts/bulk/setEnable",
+    "method": "POST",
+    "group": "Hosts",
+    "summary": "Enable or disable many host groups in one call.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object"
+    },
+    "example": {
+      "ids": [
+        "abc-123",
+        "def-456"
+      ],
+      "enable": false
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/hosts/bulk/del",
+    "method": "POST",
+    "group": "Hosts",
+    "summary": "Delete many host groups in one call.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object"
+    },
+    "example": {
+      "ids": [
+        "abc-123",
+        "def-456"
+      ]
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/backuptotgbot",
+    "method": "POST",
+    "group": "Backup",
+    "summary": "Send a fresh DB backup to every Telegram chat configured as an admin recipient. No body, no params.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/setting/all",
+    "method": "POST",
+    "group": "Settings",
+    "summary": "Return every panel setting: web server, Telegram bot, subscription, security, LDAP. The full JSON blob that the Settings page edits.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/setting/defaultSettings",
+    "method": "POST",
+    "group": "Settings",
+    "summary": "Return the computed default settings based on the request host. Useful to preview what a fresh install would use.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/setting/factoryDefaults",
+    "method": "POST",
+    "group": "Settings",
+    "summary": "Return the shipped (factory) default value per browser-safe setting key, so clients can tell a stored value apart from the default it would fall back to. Per-install material (secret, panelGuid, mTLS keys) and credential fields are never included.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/setting/update",
+    "method": "POST",
+    "group": "Settings",
+    "summary": "Persist every setting at once. The body mirrors the shape returned by /all. Invalid values (bad ports, missing cert pairs, etc.) are rejected before write.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object"
+    },
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/setting/validateRegex",
+    "method": "POST",
+    "group": "Settings",
+    "summary": "Validate any regular expression with the backend Go RE2 compiler without saving it.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object"
+    },
+    "example": {
+      "regex": "(?m)^general-purpose$"
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/setting/updateUser",
+    "method": "POST",
+    "group": "Settings",
+    "summary": "Change the panel admin username and password. Requires the current credentials for verification. The session is refreshed with the new values on success.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "oldUsername": {
+          "type": "string",
+          "description": "Current admin username."
+        },
+        "oldPassword": {
+          "type": "string",
+          "description": "Current admin password."
+        },
+        "newUsername": {
+          "type": "string",
+          "description": "Desired new username."
+        },
+        "newPassword": {
+          "type": "string",
+          "description": "Desired new password."
+        }
+      },
+      "required": [
+        "oldUsername",
+        "oldPassword",
+        "newUsername",
+        "newPassword"
+      ]
+    },
+    "example": {
+      "oldUsername": "admin",
+      "oldPassword": "admin",
+      "newUsername": "newadmin",
+      "newPassword": "newpass"
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/setting/restartPanel",
+    "method": "POST",
+    "group": "Settings",
+    "summary": "Restart the entire 3x-ui process after a 3-second grace period. The connection drops immediately; the panel comes back online ~5-10 seconds later.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/setting/testSmtp",
+    "method": "POST",
+    "group": "Settings",
+    "summary": "Test SMTP connection with stage-by-stage reporting (connect, auth, send). Returns structured result with stage and message.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/setting/testTgBot",
+    "method": "POST",
+    "group": "Settings",
+    "summary": "Test Telegram bot connection by sending a test message to the configured chat.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/setting/testDiscord",
+    "method": "POST",
+    "group": "Settings",
+    "summary": "Test Discord bot connection by sending a test embed to the configured channel.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/setting/getDefaultJsonConfig",
+    "method": "GET",
+    "group": "Settings",
+    "summary": "Return the built-in default Xray JSON config template that ships with this panel version.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/setting/apiTokens",
+    "method": "GET",
+    "group": "API Tokens",
+    "summary": "List every API token, enabled or not. The token value is never returned — only metadata.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/setting/apiTokens/create",
+    "method": "POST",
+    "group": "API Tokens",
+    "summary": "Mint a scoped API token. The server-generated plaintext is returned only once and stored as a hash.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Human-readable label, e.g. \"central-panel-a\"."
+        },
+        "scope": {
+          "type": "string",
+          "description": "admin (default), monitor, or node-sync."
+        },
+        "expiresAt": {
+          "type": "integer",
+          "description": "Future Unix milliseconds, or 0 for no expiry."
+        }
+      },
+      "required": [
+        "name"
+      ]
+    },
+    "example": {
+      "name": "central-panel-a",
+      "scope": "node-sync",
+      "expiresAt": 1798761600000
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/setting/apiTokens/delete/{id}",
+    "method": "POST",
+    "group": "API Tokens",
+    "summary": "Permanently delete a token. Any caller using it stops authenticating immediately.",
+    "parameters": [
+      {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Token row ID.",
+        "schema": {
+          "type": "integer"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "expectedScope": {
+          "type": "string",
+          "description": "Stored scope expected by the operator."
+        }
+      },
+      "required": [
+        "expectedScope"
+      ]
+    },
+    "example": {
+      "expectedScope": "node-sync"
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/setting/apiTokens/setEnabled/{id}",
+    "method": "POST",
+    "group": "API Tokens",
+    "summary": "Toggle a token enabled/disabled without deleting it. Disabled tokens are rejected by checkAPIAuth on the next request.",
+    "parameters": [
+      {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Token row ID.",
+        "schema": {
+          "type": "integer"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "New enabled state."
+        },
+        "expectedScope": {
+          "type": "string",
+          "description": "Stored scope expected by the operator."
+        }
+      },
+      "required": [
+        "enabled",
+        "expectedScope"
+      ]
+    },
+    "example": {
+      "enabled": false,
+      "expectedScope": "node-sync"
+    },
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/xray/",
+    "method": "POST",
+    "group": "Xray Settings",
+    "summary": "Return the Xray config template (JSON string), available inbound tags, client reverse tags, and the configured outbound test URL in one response.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/xray/getDefaultJsonConfig",
+    "method": "GET",
+    "group": "Xray Settings",
+    "summary": "Return the built-in default Xray config shipped with the panel (identical to /panel/api/setting/getDefaultJsonConfig).",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/xray/getOutboundsTraffic",
+    "method": "GET",
+    "group": "Xray Settings",
+    "summary": "Return traffic statistics for every outbound. Each outbound shows up/down/total counters.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/xray/getXrayResult",
+    "method": "GET",
+    "group": "Xray Settings",
+    "summary": "Return the most recent Xray process stdout/stderr output. Useful to check for startup errors or runtime warnings.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/xray/update",
+    "method": "POST",
+    "group": "Xray Settings",
+    "summary": "Save the Xray JSON config template and optionally the outbound test URL. Both are sent as form fields.",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "xraySetting": {
+          "type": "string",
+          "description": "Full Xray JSON config template."
+        },
+        "outboundTestUrl": {
+          "type": "string",
+          "description": "URL used for outbound reachability tests. Defaults to https://www.google.com/generate_204."
+        }
+      },
+      "required": [
+        "xraySetting"
+      ]
+    },
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/xray/warp/{action}",
+    "method": "POST",
+    "group": "Xray Settings",
+    "summary": "Manage Cloudflare Warp integration. The action parameter selects the operation.",
+    "parameters": [
+      {
+        "name": "action",
+        "in": "path",
+        "required": true,
+        "description": "data — return Warp stats. del — delete Warp data. config — return current config. reg — register (sends keys). changeIp — rotate the endpoint. license — set a Warp+ key. interval — set automatic rotation in hours.",
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "privateKey": {
+          "type": "string",
+          "description": "Required when action=reg."
+        },
+        "publicKey": {
+          "type": "string",
+          "description": "Required when action=reg."
+        },
+        "license": {
+          "type": "string",
+          "description": "Required when action=license."
+        },
+        "interval": {
+          "type": "integer",
+          "description": "Non-negative hours between automatic rotations. Required when action=interval; 0 disables rotation."
+        }
+      }
+    },
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/xray/nord/{action}",
+    "method": "POST",
+    "group": "Xray Settings",
+    "summary": "Manage NordVPN integration. The action parameter selects the operation.",
+    "parameters": [
+      {
+        "name": "action",
+        "in": "path",
+        "required": true,
+        "description": "countries — list available countries. servers — list servers in a country (sends countryId). reg — get NordVPN credentials (sends token). setKey — store NordVPN API key (sends key). data — return current NordVPN connection data. del — delete NordVPN data.",
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "countryId": {
+          "type": "string",
+          "description": "Required when action=servers."
+        },
+        "token": {
+          "type": "string",
+          "description": "Required when action=reg."
+        },
+        "key": {
+          "type": "string",
+          "description": "Required when action=setKey."
+        }
+      }
+    },
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/xray/pia/{action}",
+    "method": "POST",
+    "group": "Xray Settings",
+    "summary": "Manage PIA WireGuard integration. The action parameter selects the operation.",
+    "parameters": [
+      {
+        "name": "action",
+        "in": "path",
+        "required": true,
+        "description": "countries — list available countries from the signed PIA server list. servers — list regions and WireGuard servers in a country (sends countryCode). reg — sign in with a PIA username and password (sends username, password). data — return the signed-in account hint. del — delete stored PIA credentials. addKey — register a WireGuard key with the selected server (sends hostname) and return fields to build the outbound.",
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "username": {
+          "type": "string",
+          "description": "Required when action=reg."
+        },
+        "password": {
+          "type": "string",
+          "description": "Required when action=reg."
+        },
+        "countryCode": {
+          "type": "string",
+          "description": "Required when action=servers."
+        },
+        "hostname": {
+          "type": "string",
+          "description": "Required when action=addKey."
+        }
+      }
+    },
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/xray/resetOutboundsTraffic",
+    "method": "POST",
+    "group": "Xray Settings",
+    "summary": "Reset traffic counters for a specific outbound by tag.",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "string",
+          "description": "Outbound tag to reset (e.g. \"proxy\", \"direct\")."
+        }
+      },
+      "required": [
+        "tag"
+      ]
+    },
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/xray/testOutbound",
+    "method": "POST",
+    "group": "Xray Settings",
+    "summary": "Test an outbound configuration. Sends the outbound JSON (required), optionally all outbounds (to resolve sockopt.dialerProxy dependencies), and a mode flag.",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "outbound": {
+          "type": "string",
+          "description": "JSON-encoded single outbound to test (required)."
+        },
+        "allOutbounds": {
+          "type": "string",
+          "description": "JSON array of all outbounds — used to resolve dialerProxy chains."
+        },
+        "mode": {
+          "type": "string",
+          "description": "\"tcp\" for a fast dial-only probe (parallel-safe), \"real\" for a real-delay probe whose delay is the full request time including tunnel establishment. Default/empty uses a full HTTP probe reporting the warm per-request round-trip. Both HTTP variants run through a temp xray instance."
+        }
+      },
+      "required": [
+        "outbound"
+      ]
+    },
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/xray/testOutbounds",
+    "method": "POST",
+    "group": "Xray Settings",
+    "summary": "Test a batch of outbounds (max 50) through one shared temp xray instance. Returns an array of results in input order, each with the outbound tag, delay, HTTP status and a connect/TLS/TTFB timing breakdown.",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "outbounds": {
+          "type": "string",
+          "description": "JSON array of outbound configs to test (required)."
+        },
+        "allOutbounds": {
+          "type": "string",
+          "description": "JSON array of all outbounds — used to resolve dialerProxy chains."
+        },
+        "mode": {
+          "type": "string",
+          "description": "\"tcp\" for fast dial-only probes (UDP-transport outbounds are still probed over HTTP), \"real\" for real-delay probes whose delay is the full request time including tunnel establishment. Default/empty routes an HTTP request through each outbound and reports the warm per-request round-trip."
+        }
+      },
+      "required": [
+        "outbounds"
+      ]
+    },
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/xray/balancerStatus",
+    "method": "POST",
+    "group": "Xray Settings",
+    "summary": "Live state of routing balancers in the running core (RoutingService.GetBalancerInfo): current override and the targets the strategy prefers. Returns a map keyed by balancer tag.",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "tags": {
+          "type": "string",
+          "description": "Comma-separated balancer tags to query (e.g. \"b1,b2\")."
+        }
+      },
+      "required": [
+        "tags"
+      ]
+    },
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/xray/balancerOverride",
+    "method": "POST",
+    "group": "Xray Settings",
+    "summary": "Force a balancer in the running core to always pick one outbound (RoutingService.OverrideBalancerTarget). Applied live without a restart; cleared automatically when Xray restarts.",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "string",
+          "description": "Balancer tag (required)."
+        },
+        "target": {
+          "type": "string",
+          "description": "Outbound tag to force. Empty clears the override and returns control to the strategy."
+        }
+      },
+      "required": [
+        "tag"
+      ]
+    },
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/xray/routeTest",
+    "method": "POST",
+    "group": "Xray Settings",
+    "summary": "Ask the running core which outbound its router would pick for a synthetic connection (RoutingService.TestRoute). No traffic is sent.",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "domain": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Target domain. Either domain or ip is required."
+            },
+            "ip": {
+              "type": "string",
+              "description": "Target IP. Either domain or ip is required."
+            },
+            "port": {
+              "type": "integer",
+              "description": "Target port (optional)."
+            },
+            "network": {
+              "type": "string",
+              "description": "\"tcp\" (default) or \"udp\"."
+            },
+            "inboundTag": {
+              "type": "string",
+              "description": "Simulate arrival on this inbound (optional)."
+            },
+            "protocol": {
+              "type": "string",
+              "description": "Sniffed protocol such as http, tls, bittorrent (optional)."
+            },
+            "email": {
+              "type": "string",
+              "description": "User attribution for user-based rules (optional)."
+            }
+          },
+          "required": [
+            "domain"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "domain": {
+              "type": "string",
+              "description": "Target domain. Either domain or ip is required."
+            },
+            "ip": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Target IP. Either domain or ip is required."
+            },
+            "port": {
+              "type": "integer",
+              "description": "Target port (optional)."
+            },
+            "network": {
+              "type": "string",
+              "description": "\"tcp\" (default) or \"udp\"."
+            },
+            "inboundTag": {
+              "type": "string",
+              "description": "Simulate arrival on this inbound (optional)."
+            },
+            "protocol": {
+              "type": "string",
+              "description": "Sniffed protocol such as http, tls, bittorrent (optional)."
+            },
+            "email": {
+              "type": "string",
+              "description": "User attribution for user-based rules (optional)."
+            }
+          },
+          "required": [
+            "ip"
+          ]
+        }
+      ]
+    },
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/xray/geodata/files",
+    "method": "GET",
+    "group": "Xray Settings",
+    "summary": "List the geo databases (.dat files) in the Xray asset folder, with the layout detected from their contents, size, modification time and category count. A database that fails to parse is still listed, with the reason in \"error\".",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/xray/geodata/categories",
+    "method": "GET",
+    "group": "Xray Settings",
+    "summary": "One page of a database's categories, each with its entry count and the attributes its domains carry (e.g. \"ads\", \"cn\").",
+    "parameters": [
+      {
+        "name": "file",
+        "in": "query",
+        "required": true,
+        "description": "Database file name inside the asset folder, e.g. geosite.dat (required).",
+        "schema": {
+          "type": "string"
+        }
+      },
+      {
+        "name": "q",
+        "in": "query",
+        "required": false,
+        "description": "Case-insensitive substring filter on the category code.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      {
+        "name": "offset",
+        "in": "query",
+        "required": false,
+        "description": "Rows to skip. Defaults to 0.",
+        "schema": {
+          "type": "integer"
+        }
+      },
+      {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "description": "Rows to return, capped at 500. Omit it to return every category — the index is small and the panel filters it client-side.",
+        "schema": {
+          "type": "integer"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/xray/geodata/entries",
+    "method": "GET",
+    "group": "Xray Settings",
+    "summary": "One page of the rules inside a category — domain rules typed as domain/full/keyword/regexp for geosite databases, CIDRs for geoip ones.",
+    "parameters": [
+      {
+        "name": "file",
+        "in": "query",
+        "required": true,
+        "description": "Database file name inside the asset folder (required).",
+        "schema": {
+          "type": "string"
+        }
+      },
+      {
+        "name": "code",
+        "in": "query",
+        "required": true,
+        "description": "Category code, case-insensitive, e.g. google (required).",
+        "schema": {
+          "type": "string"
+        }
+      },
+      {
+        "name": "q",
+        "in": "query",
+        "required": false,
+        "description": "Case-insensitive substring filter on the rule value.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      {
+        "name": "offset",
+        "in": "query",
+        "required": false,
+        "description": "Rows to skip. Defaults to 0.",
+        "schema": {
+          "type": "integer"
+        }
+      },
+      {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "description": "Rows to return, capped at 500. Defaults to the cap.",
+        "schema": {
+          "type": "integer"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/xray/geodata/validate",
+    "method": "POST",
+    "group": "Xray Settings",
+    "summary": "Check routing tokens against the databases on disk and return only the ones that do not resolve. Plain domains and CIDRs are ignored. Each issue carries a reason: syntax, fileMissing or categoryMissing.",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "tokens": {
+          "type": "string",
+          "description": "Comma-separated routing tokens, e.g. \"geosite:google,geosite:blabla\". Max 500 per request."
+        },
+        "kind": {
+          "type": "string",
+          "description": "\"ip\" to parse the tokens as IP rules (geoip:, ext-ip:, leading !). Anything else parses them as domain rules (geosite:, ext-site:)."
+        }
+      },
+      "required": [
+        "tokens"
+      ]
+    },
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/xray/outbound-subs",
+    "method": "GET",
+    "group": "Xray Settings",
+    "summary": "List all outbound subscriptions (remote URLs that supply additional outbounds), newest first.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/xray/outbound-subs",
+    "method": "POST",
+    "group": "Xray Settings",
+    "summary": "Create an outbound subscription. The URL is fetched, parsed into outbounds with stable tags, and merged additively into the running Xray config.",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "remark": {
+          "type": "string",
+          "description": "Optional display label."
+        },
+        "url": {
+          "type": "string",
+          "description": "Subscription URL (required). Must be a public http(s) address; private/internal targets are blocked unless allowPrivate is true."
+        },
+        "tagPrefix": {
+          "type": "string",
+          "description": "Prefix for generated outbound tags. Defaults to the lowest free \"sub<N>-\" prefix."
+        },
+        "userAgent": {
+          "type": "string",
+          "default": "3x-ui-outbound-sub/1.0",
+          "description": "Custom User-Agent sent when fetching this subscription. Defaults to \"3x-ui-outbound-sub/1.0\"."
+        },
+        "updateInterval": {
+          "type": "integer",
+          "default": 600,
+          "description": "Seconds between auto-refreshes. Default 600."
+        },
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether the subscription is active. Default true."
+        },
+        "allowPrivate": {
+          "type": "boolean",
+          "default": false,
+          "description": "Allow the URL to point at a private/internal/loopback address. Default false."
+        },
+        "allowInsecure": {
+          "type": "boolean",
+          "default": false,
+          "description": "Skip TLS certificate verification when fetching the subscription's URL. Default false."
+        },
+        "prepend": {
+          "type": "boolean",
+          "default": false,
+          "description": "Place this subscription's outbounds before the manual template outbounds. Default false."
+        }
+      },
+      "required": [
+        "url"
+      ]
+    },
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/xray/outbound-subs/{id}",
+    "method": "POST",
+    "group": "Xray Settings",
+    "summary": "Update an existing outbound subscription by id. Accepts the same form fields as create.",
+    "parameters": [
+      {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Subscription id.",
+        "schema": {
+          "type": "integer"
+        }
+      }
+    ],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "remark": {
+          "type": "string",
+          "description": "Optional display label."
+        },
+        "url": {
+          "type": "string",
+          "description": "Subscription URL (required). Must be a public http(s) address; private/internal targets are blocked unless allowPrivate is true."
+        },
+        "tagPrefix": {
+          "type": "string",
+          "description": "Prefix for generated outbound tags. Defaults to the lowest free \"sub<N>-\" prefix."
+        },
+        "userAgent": {
+          "type": "string",
+          "default": "3x-ui-outbound-sub/1.0",
+          "description": "Custom User-Agent sent when fetching this subscription. Defaults to \"3x-ui-outbound-sub/1.0\"."
+        },
+        "updateInterval": {
+          "type": "integer",
+          "default": 600,
+          "description": "Seconds between auto-refreshes. Default 600."
+        },
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether the subscription is active. Default true."
+        },
+        "allowPrivate": {
+          "type": "boolean",
+          "default": false,
+          "description": "Allow the URL to point at a private/internal/loopback address. Default false."
+        },
+        "allowInsecure": {
+          "type": "boolean",
+          "default": false,
+          "description": "Skip TLS certificate verification when fetching the subscription's URL. Default false."
+        },
+        "prepend": {
+          "type": "boolean",
+          "default": false,
+          "description": "Place this subscription's outbounds before the manual template outbounds. Default false."
+        }
+      },
+      "required": [
+        "url"
+      ]
+    },
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/xray/outbound-subs/{id}",
+    "method": "DELETE",
+    "group": "Xray Settings",
+    "summary": "Delete an outbound subscription by id.",
+    "parameters": [
+      {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Subscription id.",
+        "schema": {
+          "type": "integer"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/xray/outbound-subs/{id}/del",
+    "method": "POST",
+    "group": "Xray Settings",
+    "summary": "Delete an outbound subscription by id (POST alias of DELETE for clients that cannot send DELETE).",
+    "parameters": [
+      {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Subscription id.",
+        "schema": {
+          "type": "integer"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/xray/outbound-subs/{id}/refresh",
+    "method": "POST",
+    "group": "Xray Settings",
+    "summary": "Force an immediate re-fetch of the subscription and return the parsed outbounds. Signals Xray to reload.",
+    "parameters": [
+      {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Subscription id.",
+        "schema": {
+          "type": "integer"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/xray/outbound-subs/{id}/move",
+    "method": "POST",
+    "group": "Xray Settings",
+    "summary": "Reorder a subscription one step up or down in priority (controls its position in the merged outbounds).",
+    "parameters": [
+      {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Subscription id.",
+        "schema": {
+          "type": "integer"
+        }
+      }
+    ],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "dir": {
+          "type": "string",
+          "description": "\"up\" to raise priority, anything else to lower it."
+        }
+      }
+    },
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/xray/outbound-subs/parse",
+    "method": "POST",
+    "group": "Xray Settings",
+    "summary": "Preview a subscription URL: fetch and parse it into outbounds without persisting anything.",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "Subscription URL to preview (required)."
+        },
+        "userAgent": {
+          "type": "string",
+          "description": "Custom User-Agent sent while fetching the preview."
+        },
+        "allowPrivate": {
+          "type": "boolean",
+          "description": "Allow a private/internal/loopback URL. Default false."
+        },
+        "allowInsecure": {
+          "type": "boolean",
+          "description": "Skip TLS certificate verification. Default false."
+        }
+      },
+      "required": [
+        "url"
+      ]
+    },
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/sub-balancers",
+    "method": "GET",
+    "group": "Subscription Balancers",
+    "summary": "List all subscription balancers in sort order (sort_order asc, id asc).",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/sub-balancers",
+    "method": "POST",
+    "group": "Subscription Balancers",
+    "summary": "Create a subscription balancer. It appears in the JSON subscription of every client that sits on at least one selected inbound.",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "remark": {
+          "type": "string",
+          "description": "Display label, used as the config remarks (required)."
+        },
+        "strategy": {
+          "type": "string",
+          "default": "random",
+          "description": "Balancer strategy: \"leastLoad\", \"leastPing\", \"roundRobin\" or \"random\". Default \"random\"."
+        },
+        "inboundIds": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "description": "Repeated form keys selecting the member inbounds (required, at least one)."
+        },
+        "memberWeights": {
+          "type": "object",
+          "description": "leastLoad only: JSON object mapping inbound id to a static weight > 0, e.g. {\"3\":0.2}. Lower weight = picked more often; absent ids weigh 1. Rejected for other strategies; entries for unselected inbounds are dropped."
+        },
+        "sortOrder": {
+          "type": "integer",
+          "default": 1,
+          "description": "1-based position in the subscription list. Default 1."
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether the balancer is emitted. Default true on create; unchanged when omitted on update."
+        }
+      },
+      "required": [
+        "remark",
+        "inboundIds"
+      ]
+    },
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/sub-balancers/{id}",
+    "method": "POST",
+    "group": "Subscription Balancers",
+    "summary": "Update a balancer by id. Accepts the same form fields as create (full-row update); omitting memberWeights clears stored weights, while omitting enabled keeps its current value.",
+    "parameters": [
+      {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Balancer id.",
+        "schema": {
+          "type": "integer"
+        }
+      }
+    ],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "remark": {
+          "type": "string",
+          "description": "Display label, used as the config remarks (required)."
+        },
+        "strategy": {
+          "type": "string",
+          "default": "random",
+          "description": "Balancer strategy: \"leastLoad\", \"leastPing\", \"roundRobin\" or \"random\". Default \"random\"."
+        },
+        "inboundIds": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "description": "Repeated form keys selecting the member inbounds (required, at least one)."
+        },
+        "memberWeights": {
+          "type": "object",
+          "description": "leastLoad only: JSON object mapping inbound id to a static weight > 0, e.g. {\"3\":0.2}. Lower weight = picked more often; absent ids weigh 1. Rejected for other strategies; entries for unselected inbounds are dropped."
+        },
+        "sortOrder": {
+          "type": "integer",
+          "default": 1,
+          "description": "1-based position in the subscription list. Default 1."
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether the balancer is emitted. Default true on create; unchanged when omitted on update."
+        }
+      },
+      "required": [
+        "remark",
+        "inboundIds"
+      ]
+    },
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/sub-balancers/{id}",
+    "method": "DELETE",
+    "group": "Subscription Balancers",
+    "summary": "Delete a balancer by id.",
+    "parameters": [
+      {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Balancer id.",
+        "schema": {
+          "type": "integer"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/sub-balancers/{id}/del",
+    "method": "POST",
+    "group": "Subscription Balancers",
+    "summary": "Delete a balancer by id (POST alias of DELETE for clients that cannot send DELETE).",
+    "parameters": [
+      {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Balancer id.",
+        "schema": {
+          "type": "integer"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v3"
+  },
+  {
+    "path": "/panel/api/inbounds/list",
+    "method": "GET",
+    "group": "Inbounds",
+    "summary": "3X-UI 2.x · list",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/api/inbounds/get/{id}",
+    "method": "GET",
+    "group": "Inbounds",
+    "summary": "3X-UI 2.x · {id}",
+    "parameters": [
+      {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/api/inbounds/getClientTraffics/{email}",
+    "method": "GET",
+    "group": "Inbounds",
+    "summary": "3X-UI 2.x · {email}",
+    "parameters": [
+      {
+        "name": "email",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/api/inbounds/getClientTrafficsById/{id}",
+    "method": "GET",
+    "group": "Inbounds",
+    "summary": "3X-UI 2.x · {id}",
+    "parameters": [
+      {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/api/inbounds/add",
+    "method": "POST",
+    "group": "Inbounds",
+    "summary": "3X-UI 2.x · add",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/api/inbounds/del/{id}",
+    "method": "POST",
+    "group": "Inbounds",
+    "summary": "3X-UI 2.x · {id}",
+    "parameters": [
+      {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/api/inbounds/update/{id}",
+    "method": "POST",
+    "group": "Inbounds",
+    "summary": "3X-UI 2.x · {id}",
+    "parameters": [
+      {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/api/inbounds/clientIps/{email}",
+    "method": "POST",
+    "group": "Inbounds",
+    "summary": "3X-UI 2.x · {email}",
+    "parameters": [
+      {
+        "name": "email",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/api/inbounds/clearClientIps/{email}",
+    "method": "POST",
+    "group": "Inbounds",
+    "summary": "3X-UI 2.x · {email}",
+    "parameters": [
+      {
+        "name": "email",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/api/inbounds/addClient",
+    "method": "POST",
+    "group": "Inbounds",
+    "summary": "3X-UI 2.x · addClient",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/api/inbounds/{id}/delClient/{clientId}",
+    "method": "POST",
+    "group": "Inbounds",
+    "summary": "3X-UI 2.x · {clientId}",
+    "parameters": [
+      {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      },
+      {
+        "name": "clientId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/api/inbounds/updateClient/{clientId}",
+    "method": "POST",
+    "group": "Inbounds",
+    "summary": "3X-UI 2.x · {clientId}",
+    "parameters": [
+      {
+        "name": "clientId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/api/inbounds/{id}/resetClientTraffic/{email}",
+    "method": "POST",
+    "group": "Inbounds",
+    "summary": "3X-UI 2.x · {email}",
+    "parameters": [
+      {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      },
+      {
+        "name": "email",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/api/inbounds/resetAllTraffics",
+    "method": "POST",
+    "group": "Inbounds",
+    "summary": "3X-UI 2.x · resetAllTraffics",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/api/inbounds/resetAllClientTraffics/{id}",
+    "method": "POST",
+    "group": "Inbounds",
+    "summary": "3X-UI 2.x · {id}",
+    "parameters": [
+      {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/api/inbounds/delDepletedClients/{id}",
+    "method": "POST",
+    "group": "Inbounds",
+    "summary": "3X-UI 2.x · {id}",
+    "parameters": [
+      {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/api/inbounds/import",
+    "method": "POST",
+    "group": "Inbounds",
+    "summary": "3X-UI 2.x · import",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/api/inbounds/onlines",
+    "method": "POST",
+    "group": "Inbounds",
+    "summary": "3X-UI 2.x · onlines",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/api/inbounds/lastOnline",
+    "method": "POST",
+    "group": "Inbounds",
+    "summary": "3X-UI 2.x · lastOnline",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/api/inbounds/updateClientTraffic/{email}",
+    "method": "POST",
+    "group": "Inbounds",
+    "summary": "3X-UI 2.x · {email}",
+    "parameters": [
+      {
+        "name": "email",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/api/inbounds/{id}/delClientByEmail/{email}",
+    "method": "POST",
+    "group": "Inbounds",
+    "summary": "3X-UI 2.x · {email}",
+    "parameters": [
+      {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      },
+      {
+        "name": "email",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/api/server/status",
+    "method": "GET",
+    "group": "Server",
+    "summary": "3X-UI 2.x · status",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/api/server/cpuHistory/{bucket}",
+    "method": "GET",
+    "group": "Server",
+    "summary": "3X-UI 2.x · {bucket}",
+    "parameters": [
+      {
+        "name": "bucket",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/api/server/getXrayVersion",
+    "method": "GET",
+    "group": "Server",
+    "summary": "3X-UI 2.x · getXrayVersion",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/api/server/getConfigJson",
+    "method": "GET",
+    "group": "Server",
+    "summary": "3X-UI 2.x · getConfigJson",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/api/server/getDb",
+    "method": "GET",
+    "group": "Server",
+    "summary": "3X-UI 2.x · getDb",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/api/server/getNewUUID",
+    "method": "GET",
+    "group": "Server",
+    "summary": "3X-UI 2.x · getNewUUID",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/api/server/getNewX25519Cert",
+    "method": "GET",
+    "group": "Server",
+    "summary": "3X-UI 2.x · getNewX25519Cert",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/api/server/getNewmldsa65",
+    "method": "GET",
+    "group": "Server",
+    "summary": "3X-UI 2.x · getNewmldsa65",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/api/server/getNewmlkem768",
+    "method": "GET",
+    "group": "Server",
+    "summary": "3X-UI 2.x · getNewmlkem768",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/api/server/getNewVlessEnc",
+    "method": "GET",
+    "group": "Server",
+    "summary": "3X-UI 2.x · getNewVlessEnc",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/api/server/stopXrayService",
+    "method": "POST",
+    "group": "Server",
+    "summary": "3X-UI 2.x · stopXrayService",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/api/server/restartXrayService",
+    "method": "POST",
+    "group": "Server",
+    "summary": "3X-UI 2.x · restartXrayService",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/api/server/installXray/{version}",
+    "method": "POST",
+    "group": "Server",
+    "summary": "3X-UI 2.x · {version}",
+    "parameters": [
+      {
+        "name": "version",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/api/server/updateGeofile",
+    "method": "POST",
+    "group": "Server",
+    "summary": "3X-UI 2.x · updateGeofile",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/api/server/updateGeofile/{fileName}",
+    "method": "POST",
+    "group": "Server",
+    "summary": "3X-UI 2.x · {fileName}",
+    "parameters": [
+      {
+        "name": "fileName",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/api/server/logs/{count}",
+    "method": "POST",
+    "group": "Server",
+    "summary": "3X-UI 2.x · {count}",
+    "parameters": [
+      {
+        "name": "count",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/api/server/xraylogs/{count}",
+    "method": "POST",
+    "group": "Server",
+    "summary": "3X-UI 2.x · {count}",
+    "parameters": [
+      {
+        "name": "count",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/api/server/importDB",
+    "method": "POST",
+    "group": "Server",
+    "summary": "3X-UI 2.x · importDB",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/api/server/getNewEchCert",
+    "method": "POST",
+    "group": "Server",
+    "summary": "3X-UI 2.x · getNewEchCert",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/setting/all",
+    "method": "POST",
+    "group": "Settings",
+    "summary": "3X-UI 2.x · all",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/setting/defaultSettings",
+    "method": "POST",
+    "group": "Settings",
+    "summary": "3X-UI 2.x · defaultSettings",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/setting/update",
+    "method": "POST",
+    "group": "Settings",
+    "summary": "3X-UI 2.x · update",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/setting/updateUser",
+    "method": "POST",
+    "group": "Settings",
+    "summary": "3X-UI 2.x · updateUser",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/setting/restartPanel",
+    "method": "POST",
+    "group": "Settings",
+    "summary": "3X-UI 2.x · restartPanel",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/setting/getDefaultJsonConfig",
+    "method": "GET",
+    "group": "Settings",
+    "summary": "3X-UI 2.x · getDefaultJsonConfig",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/xray/getDefaultJsonConfig",
+    "method": "GET",
+    "group": "Xray Settings",
+    "summary": "3X-UI 2.x · getDefaultJsonConfig",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/xray/getOutboundsTraffic",
+    "method": "GET",
+    "group": "Xray Settings",
+    "summary": "3X-UI 2.x · getOutboundsTraffic",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/xray/getXrayResult",
+    "method": "GET",
+    "group": "Xray Settings",
+    "summary": "3X-UI 2.x · getXrayResult",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/xray/",
+    "method": "POST",
+    "group": "Xray Settings",
+    "summary": "3X-UI 2.x · ",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/xray/warp/{action}",
+    "method": "POST",
+    "group": "Xray Settings",
+    "summary": "3X-UI 2.x · {action}",
+    "parameters": [
+      {
+        "name": "action",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      }
+    ],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/xray/update",
+    "method": "POST",
+    "group": "Xray Settings",
+    "summary": "3X-UI 2.x · update",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/xray/resetOutboundsTraffic",
+    "method": "POST",
+    "group": "Xray Settings",
+    "summary": "3X-UI 2.x · resetOutboundsTraffic",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/xray/testOutbound",
+    "method": "POST",
+    "group": "Xray Settings",
+    "summary": "3X-UI 2.x · testOutbound",
+    "parameters": [],
+    "encoding": "application/x-www-form-urlencoded",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/api/backuptotgbot",
+    "method": "GET",
+    "group": "Server",
+    "summary": "Send a database backup using the remote panel’s configured Telegram bot.",
+    "parameters": [],
+    "encoding": "application/json",
+    "schema": {},
+    "example": {},
+    "version": "v2"
+  },
+  {
+    "path": "/panel/api/inbounds/{id}/clients",
+    "method": "POST",
+    "group": "Inbounds",
+    "summary": "BenX-UI: atomically attach or detach existing customers from a managed inbound.",
+    "parameters": [
+      {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "integer"
+        }
+      }
+    ],
+    "encoding": "application/json",
+    "schema": {
+      "type": "object"
+    },
+    "example": {
+      "action": "attach",
+      "emails": [
+        "customer@example.com"
+      ]
+    },
+    "version": "v3"
+  }
+]

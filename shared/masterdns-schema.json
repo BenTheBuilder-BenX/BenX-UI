@@ -1,0 +1,317 @@
+{
+  "type": "object",
+  "fields": {
+    "DOMAIN": {
+      "type": "array",
+      "default": [],
+      "item": {
+        "type": "string"
+      }
+    },
+    "PROTOCOL_TYPE": {
+      "type": "string",
+      "default": "SOCKS5"
+    },
+    "SUPPORTED_UPLOAD_COMPRESSION_TYPES": {
+      "type": "array",
+      "default": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "item": {
+        "type": "number"
+      }
+    },
+    "SUPPORTED_DOWNLOAD_COMPRESSION_TYPES": {
+      "type": "array",
+      "default": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "item": {
+        "type": "number"
+      }
+    },
+    "UDP_READERS": {
+      "type": "number",
+      "default": 6
+    },
+    "DNS_REQUEST_WORKERS": {
+      "type": "number",
+      "default": 10
+    },
+    "MAX_CONCURRENT_REQUESTS": {
+      "type": "number",
+      "default": 32768
+    },
+    "SOCKET_BUFFER_SIZE": {
+      "type": "number",
+      "default": 8388608
+    },
+    "MAX_PACKET_SIZE": {
+      "type": "number",
+      "default": 65535
+    },
+    "DROP_LOG_INTERVAL_SECONDS": {
+      "type": "number",
+      "default": 2.0
+    },
+    "DEFERRED_SESSION_WORKERS": {
+      "type": "number",
+      "default": 6
+    },
+    "DEFERRED_SESSION_QUEUE_LIMIT": {
+      "type": "number",
+      "default": 8192
+    },
+    "INVALID_COOKIE_WINDOW_SECONDS": {
+      "type": "number",
+      "default": 2.0
+    },
+    "INVALID_COOKIE_ERROR_THRESHOLD": {
+      "type": "number",
+      "default": 10
+    },
+    "SESSION_TIMEOUT_SECONDS": {
+      "type": "number",
+      "default": 300.0
+    },
+    "SESSION_CLEANUP_INTERVAL_SECONDS": {
+      "type": "number",
+      "default": 30.0
+    },
+    "CLOSED_SESSION_RETENTION_SECONDS": {
+      "type": "number",
+      "default": 600.0
+    },
+    "SESSION_INIT_REUSE_TTL_SECONDS": {
+      "type": "number",
+      "default": 600.0
+    },
+    "RECENTLY_CLOSED_STREAM_TTL_SECONDS": {
+      "type": "number",
+      "default": 600.0
+    },
+    "RECENTLY_CLOSED_STREAM_CAP": {
+      "type": "number",
+      "default": 2000
+    },
+    "TERMINAL_STREAM_RETENTION_SECONDS": {
+      "type": "number",
+      "default": 45.0
+    },
+    "DNS_UPSTREAM_SERVERS": {
+      "type": "array",
+      "default": [
+        "1.1.1.1:53",
+        "1.0.0.1:53"
+      ],
+      "item": {
+        "type": "string"
+      }
+    },
+    "DNS_UPSTREAM_TIMEOUT": {
+      "type": "number",
+      "default": 4.0
+    },
+    "DNS_INFLIGHT_WAIT_TIMEOUT_SECONDS": {
+      "type": "number",
+      "default": 15.0
+    },
+    "DNS_FRAGMENT_ASSEMBLY_TIMEOUT": {
+      "type": "number",
+      "default": 300.0
+    },
+    "DNS_CACHE_MAX_RECORDS": {
+      "type": "number",
+      "default": 50000
+    },
+    "DNS_CACHE_TTL_SECONDS": {
+      "type": "number",
+      "default": 300.0
+    },
+    "SOCKS_CONNECT_TIMEOUT": {
+      "type": "number",
+      "default": 60.0
+    },
+    "USE_EXTERNAL_SOCKS5": {
+      "type": "boolean",
+      "default": false
+    },
+    "SOCKS5_AUTH": {
+      "type": "boolean",
+      "default": false
+    },
+    "SOCKS5_USER": {
+      "type": "string",
+      "default": "admin"
+    },
+    "SOCKS5_PASS": {
+      "type": "string",
+      "default": "123456"
+    },
+    "FORWARD_IP": {
+      "type": "string",
+      "default": ""
+    },
+    "FORWARD_PORT": {
+      "type": "number",
+      "default": 0
+    },
+    "DATA_ENCRYPTION_METHOD": {
+      "type": "enum",
+      "options": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "default": 2
+    },
+    "MAX_PACKETS_PER_BATCH": {
+      "type": "number",
+      "default": 10
+    },
+    "PACKET_BLOCK_CONTROL_DUPLICATION": {
+      "type": "number",
+      "default": 1
+    },
+    "STREAM_SETUP_ACK_TTL_SECONDS": {
+      "type": "number",
+      "default": 400.0
+    },
+    "STREAM_RESULT_PACKET_TTL_SECONDS": {
+      "type": "number",
+      "default": 300.0
+    },
+    "STREAM_FAILURE_PACKET_TTL_SECONDS": {
+      "type": "number",
+      "default": 120.0
+    },
+    "ARQ_WINDOW_SIZE": {
+      "type": "number",
+      "default": 1000
+    },
+    "ARQ_INITIAL_RTO_SECONDS": {
+      "type": "number",
+      "default": 0.5
+    },
+    "ARQ_MAX_RTO_SECONDS": {
+      "type": "number",
+      "default": 3.0
+    },
+    "ARQ_CONTROL_INITIAL_RTO_SECONDS": {
+      "type": "number",
+      "default": 0.5
+    },
+    "ARQ_CONTROL_MAX_RTO_SECONDS": {
+      "type": "number",
+      "default": 2.0
+    },
+    "ARQ_MAX_CONTROL_RETRIES": {
+      "type": "number",
+      "default": 126
+    },
+    "ARQ_INACTIVITY_TIMEOUT_SECONDS": {
+      "type": "number",
+      "default": 1800.0
+    },
+    "ARQ_DATA_PACKET_TTL_SECONDS": {
+      "type": "number",
+      "default": 2400.0
+    },
+    "ARQ_CONTROL_PACKET_TTL_SECONDS": {
+      "type": "number",
+      "default": 1200.0
+    },
+    "ARQ_MAX_DATA_RETRIES": {
+      "type": "number",
+      "default": 126
+    },
+    "ARQ_DATA_NACK_MAX_GAP": {
+      "type": "number",
+      "default": 32
+    },
+    "ARQ_DATA_NACK_INITIAL_DELAY_SECONDS": {
+      "type": "number",
+      "default": 0.3
+    },
+    "ARQ_DATA_NACK_REPEAT_SECONDS": {
+      "type": "number",
+      "default": 0.8
+    },
+    "ARQ_TERMINAL_DRAIN_TIMEOUT_SECONDS": {
+      "type": "number",
+      "default": 120.0
+    },
+    "ARQ_TERMINAL_ACK_WAIT_TIMEOUT_SECONDS": {
+      "type": "number",
+      "default": 90.0
+    },
+    "MAX_ALLOWED_CLIENT_ACTIVE_SESSION": {
+      "type": "number",
+      "default": 255
+    },
+    "MAX_ALLOWED_CLIENT_ACTIVE_STREAMS_PER_SESSION": {
+      "type": "number",
+      "default": 2000
+    },
+    "MAX_ALLOWED_CLIENT_PACKET_DUPLICATION_COUNT": {
+      "type": "number",
+      "default": 5
+    },
+    "MAX_ALLOWED_CLIENT_SETUP_PACKET_DUPLICATION_COUNT": {
+      "type": "number",
+      "default": 6
+    },
+    "MAX_ALLOWED_CLIENT_UPLOAD_MTU": {
+      "type": "number",
+      "default": 150
+    },
+    "MAX_ALLOWED_CLIENT_DOWNLOAD_MTU": {
+      "type": "number",
+      "default": 4096
+    },
+    "MAX_ALLOWED_CLIENT_RX_TX_WORKERS": {
+      "type": "number",
+      "default": 255
+    },
+    "MIN_ALLOWED_CLIENT_PING_AGGRESSIVE_INTERVAL_SECONDS": {
+      "type": "number",
+      "default": 0.05
+    },
+    "MAX_ALLOWED_CLIENT_PACKETS_PER_BATCH": {
+      "type": "number",
+      "default": 20
+    },
+    "MAX_ALLOWED_CLIENT_ARQ_WINDOW_SIZE": {
+      "type": "number",
+      "default": 8000
+    },
+    "MAX_ALLOWED_CLIENT_ARQ_DATA_NACK_MAX_GAP": {
+      "type": "number",
+      "default": 255
+    },
+    "MIN_ALLOWED_CLIENT_COMPRESSION_MIN_SIZE": {
+      "type": "number",
+      "default": 120
+    },
+    "MIN_ALLOWED_CLIENT_ARQ_INITIAL_RTO_SECONDS": {
+      "type": "number",
+      "default": 0.05
+    },
+    "LOG_LEVEL": {
+      "type": "string",
+      "default": "INFO"
+    },
+    "CONFIG_VERSION": {
+      "type": "string",
+      "default": "12"
+    }
+  }
+}
