@@ -1,0 +1,15 @@
+# No manual keys are needed. For local development run: npm run setup:local
+# This creates a private .dev.vars once and prints your private setup link.
+# Cloudflare installation generates secrets automatically with npm run deploy.
+# Keep this example comment-only: Deploy to Cloudflare prompts for active values.
+# Never commit .dev.vars, activation links or recovery files.
+# Optional domain integration. Use a scoped API token and your own account/Worker.
+# CF_ACCOUNT_ID=your-cloudflare-account-id
+# CF_WORKER_NAME=benx-ui
+# CF_API_TOKEN=your-scoped-api-token
+# Optional only for automatic SSH setup; normal outbound enrollment needs no relay.
+# SSH_RELAY_URL=https://your-private-relay.example/ssh
+# SSH_RELAY_TOKEN=your-private-relay-secret
+
+# Optional: idle agent interval in seconds, 1–10; default 3. Lower values use more Worker/D1 requests.
+# AGENT_POLL_SECONDS=3

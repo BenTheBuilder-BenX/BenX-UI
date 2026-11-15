@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.wrangler/
+.dev.vars
+.env*
+!.dev.vars.example
+.reference/
+test-results/
+*.tsbuildinfo
+
+__pycache__/
+*.pyc
+.npm-cache/
+
+.benx-deploy-*.jsonc
+.benx-install/
+.tools/

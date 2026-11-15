@@ -1,0 +1,9 @@
+import js from '@eslint/js';
+import tseslint from 'typescript-eslint';
+export default tseslint.config(
+  { ignores: ['dist/**', 'node_modules/**', '.wrangler/**', '.reference/**', 'test-results/**', 'worker-configuration.d.ts', 'scripts/**'] },
+  js.configs.recommended,
+  ...tseslint.configs.recommended,
+  { files: ['tests/**/*.mjs'], languageOptions: { globals: { Buffer: 'readonly', Response: 'readonly' } } },
+  { files: ['**/*.ts', '**/*.tsx'], rules: { '@typescript-eslint/no-explicit-any': 'error' } },
+);

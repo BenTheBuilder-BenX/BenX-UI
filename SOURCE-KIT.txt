@@ -1,0 +1,5 @@
+BenX-UI 0.9 source preview by Ben the Builder. Not a VPS-accepted deployment.
+Read README.md, README.fa.md and docs/release-acceptance.md.
+The GitHub/Cloudflare flow creates the database and generates private installation keys; the panel initializes its tables automatically.
+No workspace account IDs, runtime files, SSH relays, live scripts or supplied font binaries are included.
+Source packaging itself does not publish or deploy.

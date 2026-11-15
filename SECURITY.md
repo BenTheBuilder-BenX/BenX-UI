@@ -1,0 +1,21 @@
+# Security and operational boundary
+
+The Worker is a privileged control plane; the root agent controls only its reviewed APIs and BenX-owned services. There is no arbitrary shell endpoint. Treat the owner login, D1 encryption secret, agent enrollment scripts and client exports as credentials.
+
+Use an independent secret for every installation. Keep `.dev.vars`, `.env*`, `.wrangler`, `test-results`, runtime databases, private keys and live operations scripts out of source distribution. Use `npm run release:package` to produce the allowlisted source kit. Supplied font binaries are excluded until redistribution rights are established.
+
+The deployment helper generates the installation secrets automatically. It checks existing secret metadata and refuses partial or unreadable states; routine updates preserve all original keys. A permanent D1 first-install claim prevents simultaneous builds from uploading competing encryption keys. An interrupted empty installation can be resumed explicitly only after all earlier runs are stopped. Never reset that claim or regenerate encryption keys to repair an existing database.
+
+First owner setup requires a private, random, one-use activation link from the deployment log. The public Worker URL cannot claim ownership. Fragments are removed from browser history as the page opens; they are not passed in ordinary HTTP URLs or referrers. Keep build logs private. The panel generates the visible login, stores a salted PBKDF2 hash and signs in the owner. There is no public signup. Recovery links issued by a Cloudflare account operator rotate only the owner login; replay is rejected using the stored recovery hash.
+
+Changing a username/password in My account requires the current password, a valid same-origin session and the current account version. It revokes that account's older sessions and keeps the submitting session open. The generated environment password remains an internal session seed after database account creation; it cannot be used as a hidden fallback login. The private recovery download requires owner authentication and the current password. It contains encryption/session seeds and must be stored securely with a full D1 backup, including `owner_account`. It excludes Cloudflare tokens and the current login password/hash.
+
+Bound-D1 migrations run automatically with an expiring cross-isolate lease and per-file atomic migration markers. Earlier completed files survive interruption. Initialization limits its binding calls to leave room within the Free plan's per-invocation allowance, returning a retryable response when more work remains. Keep normal backups before updates; schema changes are not automatically reversible.
+
+Outbound agent routes authenticate with per-agent secrets. Do not put an interactive Cloudflare Access login in front of `/api/agent/*`, `/sub/*` or the Telegram webhook. The owner/admin pages can use an additional Access gate. A compromised Worker or root VPS can control its paired servers; scoped Cloudflare API tokens are optional and should cover only intended zones.
+
+Pairing keys expire after twenty minutes. The same generated node identity may retry pairing after a lost reply. A second identity cannot claim it. Removing the server record deletes its enrollment; disabling the connection immediately denies channel access. To retire a server, disable its services, remove tunnels, remove the connection and stop the agent on the host. Deleting a connection does not stop the VPS.
+
+Commands and results are encrypted in D1 and retained for at most 24 hours under the five-minute cleanup cron. A private VPS journal keeps an action result until acknowledgement. Started/claimed actions are not automatically redelivered; interrupted actions require actual-state inspection. Timed-out queued actions expire. This chooses an explicit uncertain outcome over duplicate privileged writes.
+
+Report suspected vulnerabilities privately through the repository's Security reporting feature when available. If private reporting is unavailable, open only a generic request for a private reporting channel; do not publish exploit details. Never include access tokens, exported subscriptions, private profiles, personal contact details or database files in public issues. No public email address is required for this project.
