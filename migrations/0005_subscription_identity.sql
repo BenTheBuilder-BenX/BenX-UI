@@ -1,0 +1,1 @@
+ALTER TABLE subscriptions ADD COLUMN identity TEXT NOT NULL DEFAULT '';

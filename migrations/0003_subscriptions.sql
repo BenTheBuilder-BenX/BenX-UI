@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS subscriptions (server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE, email TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE, secret TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(server_id, email));

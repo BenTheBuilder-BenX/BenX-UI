@@ -1,0 +1,2 @@
+ALTER TABLE managed_state ADD COLUMN checkpoint_at INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE managed_state ADD COLUMN warning TEXT NOT NULL DEFAULT '';
