@@ -1,0 +1,65 @@
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
+import { generatedSecrets } from './deploy.mjs';
+
+const out = resolve('test-results/install-runtime');
+mkdirSync(out, { recursive: true });
+execFileSync(process.execPath, ['node_modules/wrangler/bin/wrangler.js', 'deploy', '--config', 'wrangler.example.jsonc', '--dry-run', '--outdir', out], { stdio: 'pipe', env: { ...process.env, WRANGLER_LOG_PATH: resolve(out, 'logs'), WRANGLER_SEND_METRICS: 'false' } });
+const options = { modules: true, scriptPath: resolve(out, 'index.js'), compatibilityDate: '2026-10-01', compatibilityFlags: ['nodejs_compat'], d1Databases: { DB: randomUUID() }, bindings: { AUTO_MIGRATE: '1', INSTALL_PROOF: 'a'.repeat(64), ADMIN_USERNAME: 'admin' } };
+const mf = new Miniflare(convertV4MiniflareOptions(options));
+const origin = 'https://panel.example.com';
+const call = (path, method = 'GET', body, cookie = '', entry = '', extra = {}) => mf.dispatchFetch(origin + path, { method, headers: { Origin: origin, 'Content-Type': 'application/json', Cookie: cookie, 'X-Benx-Workspace': entry, ...extra }, body: body === undefined ? undefined : JSON.stringify(body) });
+const cookieOf = response => response.headers.get('Set-Cookie').split(';')[0];
+try {
+  const status = await call('/api/session');
+  assert.equal(status.status, 200);
+  assert.equal((await status.json()).installing, true);
+  const claim = await call('/api/install/claim', 'POST', { claimId: randomUUID() }, '', '', { Authorization: 'Bearer ' + options.bindings.INSTALL_PROOF });
+  assert.equal(claim.status, 200, await claim.text());
+  const keys = generatedSecrets();
+  await mf.setOptions(convertV4MiniflareOptions({ ...options, bindings: { ...options.bindings, ...keys } }));
+  const activated = await call('/api/setup/activate', 'POST', { token: keys.OWNER_SETUP_TOKEN });
+  assert.equal(activated.status, 200);
+  const owner = await activated.json(), oldCookie = cookieOf(activated);
+  assert.equal(owner.username, 'admin'); assert.ok(owner.password.length >= 24);
+  const duplicate = await call('/api/setup/activate', 'POST', { token: keys.OWNER_SETUP_TOKEN }); assert.equal(duplicate.status, 409);
+  const seed = await call('/api/login', 'POST', { username: 'admin', password: keys.ADMIN_PASSWORD }); assert.equal(seed.status, 401);
+  const login = await call('/api/login', 'POST', { username: owner.username, password: owner.password }); assert.equal(login.status, 200);
+  const before = await call('/api/account', 'GET', undefined, oldCookie, owner.entryPath); assert.equal(before.status, 200);
+  const changed = await call('/api/account', 'PUT', { username: 'changed-owner', password: 'local-runtime-test-password', currentPassword: owner.password, version: 1 }, oldCookie, owner.entryPath); assert.equal(changed.status, 200);
+  const old = await call('/api/account', 'GET', undefined, oldCookie, owner.entryPath); assert.equal(old.status, 401);
+  const recovery = await call('/api/account/recovery', 'POST', { currentPassword: 'local-runtime-test-password' }, cookieOf(changed), owner.entryPath); assert.equal(recovery.status, 200);
+  assert.equal((await recovery.json()).secrets.ENCRYPTION_KEY, keys.ENCRYPTION_KEY);
+  const cookie = cookieOf(changed);
+  const reads = ['/api/servers', '/api/enrollments', '/api/tunnels', '/api/tunnel-tests', '/api/usage-refresh', '/api/operation-mode', '/api/audit', '/api/store', '/api/store/orders', '/api/lab', '/api/assistant/settings', '/api/cloudflare'];
+  for (const path of reads) {
+    const anonymous = await call(path); assert.equal(anonymous.status, 401, `Anonymous access: ${path}`);
+    const response = await call(path, 'GET', undefined, cookie, owner.entryPath);
+    assert.equal(response.status, 200, `Authenticated read: ${path}: ${await response.clone().text()}`);
+    assert.equal(response.headers.get('Cache-Control'), 'no-store', path);
+    await response.json();
+  }
+  const foreignOrigin = await call('/api/enrollments', 'POST', { name: 'Local test' }, cookie, owner.entryPath, { Origin: 'https://foreign.example' });
+  assert.equal(foreignOrigin.status, 403);
+  const enrolled = await call('/api/enrollments', 'POST', { name: 'Local runtime VPS' }, cookie, owner.entryPath);
+  assert.equal(enrolled.status, 201);
+  const enrollment = await enrolled.json(), pairingToken = enrollment.script.match(/Bearer ([a-f0-9]{64})/)[1];
+  const nodeToken = 'b'.repeat(64);
+  const ping = await call(`/api/agent/ping/${enrollment.id}`, 'POST', {}, '', '', { Authorization: `Bearer ${pairingToken}` });
+  assert.equal(ping.status, 200);
+  const paired = await call(`/api/agent/pair/${enrollment.id}`, 'POST', { token: nodeToken }, '', '', { Authorization: `Bearer ${pairingToken}` });
+  assert.equal(paired.status, 200);
+  const poll = await call(`/api/agent/poll/${enrollment.id}`, 'POST', {}, '', '', { Authorization: `Bearer ${nodeToken}` });
+  assert.equal(poll.status, 200); assert.equal((await poll.json()).command, null);
+  const rejectedPoll = await call(`/api/agent/poll/${enrollment.id}`, 'POST', {}, cookie, owner.entryPath);
+  assert.equal(rejectedPoll.status, 401);
+  const listed = await (await call('/api/servers', 'GET', undefined, cookie, owner.entryPath)).json();
+  assert.equal(listed.length, 1); assert.equal(listed[0].id, enrollment.id);
+  assert.ok(!JSON.stringify(listed).includes(pairingToken));
+  assert.equal((await call('/sub/invalid')).status, 404);
+  console.log(JSON.stringify({ runtime: 'Cloudflare local workerd + D1', automaticSchema: 'passed', firstInstallClaim: 'passed', activationAndGeneratedLogin: 'passed', seedRejected: 'passed', credentialChangeAndSessionRevocation: 'passed', originalRecoveryKeys: 'passed', authenticatedReadRoutes: reads.length, anonymousIsolation: 'passed', originRejection: 'passed', outboundEnrollmentPairingPolling: 'passed', credentialRedaction: 'passed', liveAccountWrites: false }));
+} finally { await mf.dispose(); }

@@ -1,0 +1,5 @@
+import { readFileSync, writeFileSync } from 'node:fs';
+const operations = JSON.parse(readFileSync(new URL('../shared/operations.json', import.meta.url), 'utf8')).filter(o => o.version === 'v3').map(({ path, method }) => ({ path, method }));
+writeFileSync(new URL('../agent/panel-operations.json', import.meta.url), JSON.stringify(operations));
+const names = ['outbound.py', 'storefront.py', 'arcade.html', 'dns_service.py', 'dnsproxy-release.json', 'reality_probe.py', 'vpn_network.py', 'benx_agent.py', 'accounting.py', 'tunnels.py', 'tunnel_tools.py', 'tunnel_adapters.py', 'tunnel_tls_bridge.py', 'tunnel_probe.py', 'tunnel-releases.json', 'setup.py', 'certificates.py', 'control.py', 'masterdnsvpn-release.json', 'masterdnsvpn-defaults.json', 'xray-release.json', '3x-ui-install.sh', '3x-ui-release.json', 'panel-operations.json', 'benx-agent.service'];
+writeFileSync(new URL('../worker/agent-bundle.json', import.meta.url), JSON.stringify(Object.fromEntries(names.map(name => [name, readFileSync(new URL(`../agent/${name}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n')]))));
