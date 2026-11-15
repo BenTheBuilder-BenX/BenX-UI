@@ -1,0 +1,17 @@
+import { useEffect, useState } from 'react';
+import { Clock3, Save, RefreshCw } from 'lucide-react';
+import { api } from '../lib/api';
+import { t } from '../lib/i18n';
+import { usePanel } from '../context';
+import { Button, Field, Notice, Select } from './ui';
+interface Settings {interval_minutes:number;version:number;servers?:Array<{server_id:string;refreshed_at:number;error:string}>}
+export function UsageRefresh() {
+  const {demo,administrator,server,toast,refresh} = usePanel();
+  const [settings,setSettings] = useState<Settings>(), [interval,setIntervalValue] = useState(60),[busy,setBusy]=useState(false),[error,setError]=useState('');
+  useEffect(()=>{ if(administrator)return; if(demo){setSettings({interval_minutes:60,version:1});return;} void api<Settings>('/usage-refresh').then(s=>{setSettings(s);setIntervalValue(s.interval_minutes);}).catch(e=>setError((e as Error).message)); },[demo,administrator]);
+  if(administrator)return null;
+  const current=settings?.servers?.find(s=>s.server_id===server.id);
+  const readNow=async()=>{setBusy(true);setError('');try{if(!demo){await api('/usage-refresh','POST',{serverId:server.id});setSettings(await api<Settings>('/usage-refresh'));await refresh();}toast('Client usage refreshed from the server.');}catch(e){setError((e as Error).message);}finally{setBusy(false);}};
+  const save=async()=>{setBusy(true);setError('');try {const s=demo ? {interval_minutes:interval,version:settings!.version+1} : await api<Settings>('/usage-refresh','PUT',{interval_minutes:interval,version:settings!.version});setSettings(old=>({...old,...s}));toast('Usage refresh schedule saved.');}catch(e){setError((e as Error).message);}finally{setBusy(false);}};
+  return <section className="card form-stack usage-refresh-settings"><div className="setup-section-title"><Clock3 size={18}/><h3>{t('Scheduled client usage refresh')}</h3></div><p>{t('Read client traffic from connected servers even when this browser is closed. This does not import server settings, apply saved edits or change Manual mode.')}</p>{error&&<Notice tone="error">{error}</Notice>}<div className="button-row"><Field label="Refresh interval"><Select aria-label={t('Usage refresh interval')} value={interval} disabled={!settings||busy} onChange={e=>setIntervalValue(Number(e.target.value))}>{[[0,'Off · manual refresh only'],[60,'Every hour · recommended'],[180,'Every 3 hours'],[360,'Every 6 hours'],[1440,'Daily'],[15,'Every 15 minutes · higher usage']].map(([value,label])=><option key={value} value={value}>{t(String(label))}</option>)}</Select></Field><Button icon={Save} busy={busy} disabled={!settings||interval===settings.interval_minutes} onClick={()=>void save()}>Save refresh schedule</Button><Button icon={RefreshCw} busy={busy} disabled={!settings||!server.enabled} onClick={()=>void readNow()}>Read usage now</Button></div><small className="muted">{t('Hourly refresh is about 24 counter reads per server per day. Larger fleets are spread across bounded batches. Runs start on the five-minute scheduler; busy jobs and unavailable servers are skipped safely. This reduces calls, but cannot guarantee a Cloudflare Free CPU allowance for large profiles.')}</small>{current&&<><p>{t('Last successful usage refresh')}: {current.refreshed_at ? new Date(current.refreshed_at).toLocaleString() : t('Waiting for first scheduled refresh')}</p>{current.error&&<Notice tone="warning">{current.error}</Notice>}</>}</section>;
+}
