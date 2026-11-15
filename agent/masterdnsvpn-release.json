@@ -1,0 +1,17 @@
+{
+  "version": "v2026.06.13.234407-7de2476",
+  "assets": {
+    "AMD64": {
+      "url": "https://github.com/masterking32/MasterDnsVPN/releases/download/v2026.06.13.234407-7de2476/MasterDnsVPN_Server_Linux_AMD64.tar.gz",
+      "sha256": "597bdc510b896a3b4ac89865ee7cefa73191025c64093f5e0f85c76a70430de9"
+    },
+    "ARMV7": {
+      "url": "https://github.com/masterking32/MasterDnsVPN/releases/download/v2026.06.13.234407-7de2476/MasterDnsVPN_Server_Linux_ARMV7.tar.gz",
+      "sha256": "a71e103e87aab02004d24906dc27e5f34fce4b281cdba48504c474bc84955c55"
+    },
+    "ARM64": {
+      "url": "https://github.com/masterking32/MasterDnsVPN/releases/download/v2026.06.13.234407-7de2476/MasterDnsVPN_Server_Linux_ARM64.tar.gz",
+      "sha256": "4f3d0e8afac0381e5a47e3064e07d0bac27c56b5f1a4fd8df8013f157168cbbf"
+    }
+  }
+}
