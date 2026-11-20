@@ -16,13 +16,16 @@ export async function dashboard(request: Request, env: Env, server: StoredServer
     !savedOnly && includeCapabilities && row?.bound !== 0 ? callRemoteJson(server, env, { path: '/benx/v1/capabilities', method: 'GET' }) : Promise.resolve(null),
     controlRoute(controlRequest, env, server, ctx).then(r => r.json()),
   ]);
+  const metrics = results[0].status === 'fulfilled' ? results[0].value : null;
+  const validMetrics = metrics && typeof metrics === 'object' && 'cpu' in metrics && Number.isFinite(metrics.cpu);
+  const metricsUnavailable = !savedOnly && row?.bound !== 0 && !validMetrics;
   return Response.json({
-    status: results[0].status === 'fulfilled' ? results[0].value : null,
+    status: validMetrics ? metrics : null,
     capabilities: results[1].status === 'fulfilled' ? results[1].value : null,
     control: results[2].status === 'fulfilled' ? results[2].value : null,
     inbounds: document ? configurationView(document, { path: '/panel/api/inbounds/list', method: 'GET' }) : [],
     online: [],
-    error: results[0].status === 'rejected' ? 'Live server metrics could not be refreshed. Saved configuration remains available.' : '',
+    error: metricsUnavailable ? 'Live server metrics could not be refreshed. Saved configuration remains available.' : '',
     syncError: results[2].status === 'rejected' ? 'Synchronization status could not be refreshed.' : '',
   }, { headers: { 'Cache-Control': 'no-store' } });
 }

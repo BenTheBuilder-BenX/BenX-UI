@@ -2,7 +2,9 @@
 
 **پنل مدیریت VPN روی Cloudflare Workers — ساخته‌شده توسط Ben the Builder**
 
-[English](README.md) · [راهنمای کامل فارسی](docs/guide.fa.md) · [نصب انگلیسی](docs/easy-install.md) · [تنظیمات Cloudflare](docs/cloudflare.md) · [گزارش بررسی](docs/validation-2026-11-15.md)
+[English](README.md) · [راهنمای کامل فارسی](docs/guide.fa.md) · [نصب انگلیسی](docs/easy-install.md) · [تنظیمات Cloudflare](docs/cloudflare.md) · [تغییرات و بررسی نسخه جدید](docs/release-2026-11-20.md)
+
+آخرین پیش‌نمایش کد: **[v0.9.0-preview.2](https://github.com/BenTheBuilder-BenX/BenX-UI/releases/tag/v0.9.0-preview.2)** — فهرست سریع‌تر مشتریان، بازنشانی وضعیت هنگام تغییر سرور، حفظ وضعیت آنلاین در به‌روزرسانی پس‌زمینه و مدیریت بهتر خطاهای API و آمار. [یادداشت انتشار](docs/release-2026-11-20.md).
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2FBenTheBuilder-BenX%2FBenX-UI)
 

@@ -50,6 +50,16 @@ beforeEach(async () => {
 afterEach(() => { db.close(); remote.mockReset(); });
 
 describe('Native desired-state reconciliation', () => {
+  it('keeps saved inbounds available when live metrics have an invalid CPU value', async () => {
+    db.exec("UPDATE operation_settings SET mode='manual'");
+    await createManaged(env, 's', profile());
+    remote.mockResolvedValue({ cpu: 'unavailable' });
+    const response = await dashboard(new Request('https://benx.test/'), env, server, {} as ExecutionContext);
+    const snapshot = await response.json() as { status: unknown; error: string; inbounds: unknown[] };
+    expect(snapshot.status).toBeNull();
+    expect(snapshot.error).toContain('metrics');
+    expect(snapshot.inbounds).toHaveLength(2);
+  });
   it('holds ten manual edits with no VPS calls, then sends the final batch once and confirms it', async () => {
     db.exec("UPDATE operation_settings SET mode='manual'");
     await createManaged(env, 's', profile());

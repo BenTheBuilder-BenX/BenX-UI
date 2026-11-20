@@ -2,7 +2,9 @@
 
 **A Cloudflare Worker VPN control panel — built by Ben the Builder.**
 
-[فارسی](README.fa.md) · [English setup](docs/easy-install.md) · [راهنمای فارسی](docs/guide.fa.md) · [Cloudflare operations](docs/cloudflare.md) · [Validation](docs/validation-2026-11-15.md)
+[فارسی](README.fa.md) · [English setup](docs/easy-install.md) · [راهنمای فارسی](docs/guide.fa.md) · [Cloudflare operations](docs/cloudflare.md) · [Latest changes and validation](docs/release-2026-11-20.md)
+
+Latest source preview: **[v0.9.0-preview.2](https://github.com/BenTheBuilder-BenX/BenX-UI/releases/tag/v0.9.0-preview.2)** — faster client lists, server-switch state reset, preserved online status during background refresh, and improved API/metrics error handling. [Release notes](docs/release-2026-11-20.md).
 
 <!-- BENX_DEPLOY_BUTTON -->
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2FBenTheBuilder-BenX%2FBenX-UI)

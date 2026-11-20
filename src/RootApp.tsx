@@ -153,7 +153,7 @@ export default function RootApp({ administrator = false, signedIn = false }: { a
       setLastUpdated(Date.now());
     }
     if (results[1].status === 'fulfilled') { setInbounds(Array.isArray(results[1].value) ? results[1].value : []); if (unbound) setLastUpdated(Date.now()); }
-    if (results[2].status === 'fulfilled') setOnline(Array.isArray(results[2].value) ? results[2].value : []);
+    if (live && results[2].status === 'fulfilled') setOnline(Array.isArray(results[2].value) ? results[2].value : []);
     if (results[3].status === 'fulfilled') setCapabilities(results[3].value);
     const failed = results.slice(0, 2).find((r, index) => r.status === 'rejected' && !(unbound && index === 0));
     setError(failed?.status === 'rejected' ? failed.reason instanceof Error ? failed.reason.message : 'Could not refresh the remote panel.' : '');
@@ -197,7 +197,7 @@ export default function RootApp({ administrator = false, signedIn = false }: { a
     switch (page) {
       case 'launch': return <LaunchCenter />; case 'domains': return <Domains />;
       case 'account': return <Account />;
-      case 'overview': return <Overview />; case 'inbounds': return <Inbounds key={server.id} />; case 'clients': return <Clients />;
+      case 'overview': return <Overview />; case 'inbounds': return <Inbounds key={server.id} />; case 'clients': return <Clients key={server.id} />;
       case 'team': return <Team key={demo ? 'demo' : 'live'} />;
       case 'testing': return <TestingLab key={demo ? 'demo' : 'live'} />;
       case 'telegram': return <TelegramStore key={demo ? 'demo' : 'live'} />;

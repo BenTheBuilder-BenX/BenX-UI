@@ -31,7 +31,7 @@ async function request<T>(path: string, init: RequestInit, safeRead: boolean, bi
       const error = cause instanceof ApiError ? cause : new ApiError(cause instanceof Error && /Timeout|Abort/.test(cause.name)
         ? 'The server took too long to respond. You can keep using the panel and retry.'
         : 'The connection was interrupted. Please retry.', 0, 'connection_failed');
-      if (!safeRead || attempt >= 1 || !(transient.has(error.status) || error.status === 0 || error.code === 'invalid_response')) throw error;
+      if (!safeRead || attempt >= 1 || !(transient.has(error.status) || error.status === 0 || (error.code === 'invalid_response' && error.status >= 200 && error.status < 300))) throw error;
       await new Promise(resolve => setTimeout(resolve, 700 + Math.random() * 300));
     }
   }

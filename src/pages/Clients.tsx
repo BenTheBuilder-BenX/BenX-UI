@@ -14,10 +14,17 @@ import { effectiveMultiplier, serviceClientFields, serviceIds, type ClientPolicy
 import { JsonOption, OptionsEditor } from '../components/OptionsEditor';
 
 export function makeClientRows(inbounds: Inbound[]): ClientRow[] {
-  return inbounds.flatMap(inbound => inboundClients(inbound).map(c => {
-    const stats = inbound.clientStats?.find(s => s.email === c.email);
-    return { ...c, up: stats?.up ?? 0, down: stats?.down ?? 0, inboundId: inbound.id, inboundName: inbound.remark, inboundProtocol: inbound.protocol, original: c, key: `${inbound.id}-${c.email}`, stream: parseObject(inbound.streamSettings) };
-  }));
+  return inbounds.flatMap(inbound => {
+    const traffic = new Map<string, { up?: number; down?: number }>();
+    for (const stat of inbound.clientStats ?? []) {
+      if (!traffic.has(stat.email)) traffic.set(stat.email, stat);
+    }
+    const stream = parseObject(inbound.streamSettings);
+    return inboundClients(inbound).map(c => {
+      const stats = traffic.get(c.email);
+      return { ...c, up: stats?.up ?? 0, down: stats?.down ?? 0, inboundId: inbound.id, inboundName: inbound.remark, inboundProtocol: inbound.protocol, original: c, key: `${inbound.id}-${c.email}`, stream };
+    });
+  });
 }
 export function Clients() {
   const { inbounds, server, remote, refresh, confirm, toast, online, policy, policyReady, savePolicy, demo } = usePanel();
@@ -31,7 +38,12 @@ export function Clients() {
     for (const value of directory) { const detail = parseObject(value), { client } = hydrateClient(value), previous = map.get(client.email), traffic = parseObject(detail.traffic || detail.clientStats || detail.stats); if (!client.email) continue; map.set(client.email, { ...(previous || { inboundId: 0, inboundName: 'No attachments', inboundProtocol: '', stream: {} }), ...client, original: client, up: Number(traffic.up ?? detail.up ?? previous?.up ?? 0), down: Number(traffic.down ?? detail.down ?? previous?.down ?? 0), key: `client:${client.email}` }); }
     return [...map.values()];
   }, [inbounds, server.version, directory]);
-  const visible = rows.filter(c => `${c.email} ${c.comment ?? ''} ${c.inboundName}`.toLowerCase().includes(search.toLowerCase()) && (inboundFilter === 'all' || inbounds.some(i => i.id === Number(inboundFilter) && inboundClients(i).some(row => row.email === c.email))) && (filter === 'all' || filter === 'enabled' && c.enable || filter === 'disabled' && !c.enable || filter === 'online' && online.includes(c.email)));
+  const attachedEmails = useMemo(() => {
+    const inbound = inbounds.find(row => row.id === Number(inboundFilter));
+    return new Set(inbound ? inboundClients(inbound).map(client => client.email) : []);
+  }, [inbounds, inboundFilter]);
+  const onlineEmails = useMemo(() => new Set(online), [online]);
+  const visible = rows.filter(c => `${c.email} ${c.comment ?? ''} ${c.inboundName}`.toLowerCase().includes(search.toLowerCase()) && (inboundFilter === 'all' || (server.version === 'v3' ? attachedEmails.has(c.email) : c.inboundId === Number(inboundFilter))) && (filter === 'all' || filter === 'enabled' && c.enable || filter === 'disabled' && !c.enable || filter === 'online' && onlineEmails.has(c.email)));
   const bulk = async (mode: 'reset' | 'delete') => {
     const picked = rows.filter(c => selected.includes(c.key));
     if (!picked.length || !await confirm(mode === 'delete' ? `Delete ${picked.length} client attachment(s)?` : 'Reset selected client traffic?', server.version === 'v3' && mode === 'delete' ? 'In 3X-UI 3.x, deleting a client removes it from every attached inbound.' : 'This affects the selected clients on this server.')) return;

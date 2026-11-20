@@ -29,6 +29,14 @@ describe('API recovery', () => {
     await expect(panelRequest('test', { method: 'POST', path: '/panel/api/inbounds/add', body: {} })).rejects.toMatchObject({ code: 'invalid_response' });
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
+  it('does not repeat a denied read when the gateway returns HTML', async () => {
+    const fetcher = vi.fn().mockImplementation(() => new Response('Access denied', { status: 403 }));
+    vi.stubGlobal('fetch', fetcher);
+    const assertion = expect(api('/servers')).rejects.toMatchObject({ status: 403 });
+    await vi.runAllTimersAsync();
+    await assertion;
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
   it('bounds retries for network failures', async () => {
     const fetcher = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
     vi.stubGlobal('fetch', fetcher);
