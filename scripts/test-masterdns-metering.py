@@ -120,13 +120,15 @@ def exercise(root, binaries, stack):
         cmd = ['curl', '--silent', '--fail', '--max-time', '12', '--noproxy', '', '--socks5', f'127.0.0.1:{proxies[name]}', f'http://127.0.0.1:{httpd.server_port}/sample']
         result = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, timeout=15)
         return result.returncode == 0 and result.stdout == sample
-    for name in names:
+    def confirm_transfer(name):
         for attempt in range(6):
             if transfer(name):
-                break
+                return
             if attempt == 5:
                 raise RuntimeError(f'DNS transfer failed for {name}; process status: {[(k, v.poll()) for k, v in handles.items()]}')
             time.sleep(1)
+    for name in names:
+        confirm_transfer(name)
     agent.accounting.reconcile(agent)
     snapshot = agent.accounting.read(agent, 'accounting.json', {})
     for name in names:
@@ -134,7 +136,8 @@ def exercise(root, binaries, stack):
         assert counters['rawDown'] >= len(sample) and counters['down'] == 2 * counters['rawDown']
     assert agent.load_state()['clients'][names[0]]['_quotaBlocked']
     assert not agent.load_state()['clients'][names[1]].get('_quotaBlocked')
-    assert transfer(names[1]), 'The remaining customer lost access after the quota was applied'
+    # The native apply restarts Xray. Wait for the surviving client's first usable connection.
+    confirm_transfer(names[1])
     assert not transfer(names[0]), 'An exhausted identity could still make a new connection'
     print('Two DNS clients transferred 96 KiB each. Separate Xray counters, a 2x rate, quota cut-off and continuing access for the second client passed.')
 

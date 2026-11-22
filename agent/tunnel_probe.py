@@ -2,6 +2,7 @@
 import hmac
 import ipaddress
 import json
+import os
 import secrets
 import socket
 import struct
@@ -46,7 +47,16 @@ def start(agent, tunnel_id, body):
         if tunnel_id in SERVERS:
             return {'ready': True}
         listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        listener.settimeout(1); listener.bind((host, port)); listener.listen(4)
+        try:
+            if os.name == 'posix':
+                # Consecutive methods reuse this port while previous connections are in TIME_WAIT.
+                listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            listener.settimeout(1)
+            listener.bind((host, port))
+            listener.listen(4)
+        except OSError:
+            listener.close()
+            raise
         stop_event = threading.Event(); SERVERS[tunnel_id] = (listener, stop_event)
     def serve():
         expires = time.monotonic() + 120
@@ -95,7 +105,13 @@ def stop(agent, tunnel_id, expected=None):
             return {'stopped': True}
         entry = SERVERS.pop(tunnel_id, None)
     if entry:
-        entry[1].set(); entry[0].close()
+        listener, stopped = entry
+        stopped.set()
+        try:
+            listener.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
+        listener.close()
     return {'stopped': True}
 
 

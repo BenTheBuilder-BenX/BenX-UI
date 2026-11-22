@@ -112,6 +112,8 @@ class ExtensionTests(unittest.TestCase):
         self.assertEqual(result['state'],'passed'); self.assertEqual(result['bytes'],131072); self.assertEqual(result['lossPercent'],0)
         self.assertGreater(result['uploadMbps'],0); self.assertGreater(result['downloadMbps'],0)
         self.assertTrue(tunnel_probe.stop(self.agent,'test')['stopped'])
+        self.assertTrue(tunnel_probe.start(self.agent,'test',{'token':'b'*64})['ready'])
+        self.assertEqual(tunnel_probe.measure(self.agent,'test',{'token':'b'*64,'byteLimit':65536})['bytes'],131072)
     def test_probe_rejects_excessive_payload_and_invalid_auth(self):
         (self.root/'setup.json').write_text(json.dumps({'method':'ssh-direct','role':'source','address':'10.0.0.1/30','peerAddress':'10.0.0.2/30','listenPort':1234,'destinationPort':1235}))
         for body in [{'token':'bad'}, {'token':'a'*64,'byteLimit':100*1024*1024}]:
