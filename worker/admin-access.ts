@@ -1,6 +1,12 @@
 import { HttpError, readJson } from './security';
 import type { Principal } from './team';
 import type { ServerScope } from '../shared/team';
+export function canManageStore(actor: Principal | null) {
+  if (actor?.role === 'root') return true;
+  if (actor?.role !== 'admin') return false;
+  const scope: ServerScope = JSON.parse(actor.member?.server_scope || '{}');
+  return scope.all === true && scope.store === true;
+}
 export function canUseServer(actor: Principal, id: string) {
   if (actor.role === 'root') return true;
   const scope: ServerScope = JSON.parse(actor.member?.server_scope || '{"all":false,"ids":[]}');
@@ -14,6 +20,7 @@ export async function adminAccess(request: Request, env: Env, actor: Principal) 
   if (actor.role !== 'admin') throw new HttpError(403, 'Use your customer workspace.');
   const path = new URL(request.url).pathname;
   if (['/api/servers', '/api/audit', '/api/providers/vpnjantit', '/api/operation-mode'].includes(path) && request.method === 'GET') return;
+  if ((path === '/api/store' || path.startsWith('/api/store/')) && canManageStore(actor)) return;
   const server = path.match(/^\/api\/servers\/([^/]+)\/(request|health|probe|restore|upload|policy|subscriptions|subscription-page|locations|control|dashboard)$/);
   if (server) {
     requireServer(actor, server[1]);

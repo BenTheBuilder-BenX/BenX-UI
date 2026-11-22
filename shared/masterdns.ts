@@ -21,6 +21,17 @@ export function validateMasterDNS(inbounds: JsonObject[], clients: Record<string
     }
   }
 }
+/** Customer-facing attachments omit a helper only while its owning listener is also attached. */
+export function primaryAttachmentIds(ids: number[], inbounds: JsonObject[]) {
+  const attached = new Set(ids), companions = new Set<number>();
+  for (const inbound of inbounds) {
+    if (!attached.has(Number(inbound.id))) continue;
+    const settings = parseObject(inbound.settings);
+    if (inbound.protocol === 'masterdnsvpn' && settings.meteredInboundId) companions.add(Number(masterDNSBackend(inbound, inbounds)?.id));
+    if (inbound.protocol === 'openvpn' && settings.pairedTcpId && inbounds.some(i => i.id === settings.pairedTcpId && i.protocol === 'openvpn' && parseObject(i.settings).pairedUdpId === inbound.id)) companions.add(Number(settings.pairedTcpId));
+  }
+  return ids.filter(id => !companions.has(id));
+}
 export function withDNSBackends(ids: number[], inbounds: JsonObject[]) {
   return [...new Set([...ids, ...inbounds.filter(i => ids.includes(Number(i.id)) && i.protocol === 'masterdnsvpn').flatMap(i => { const target = masterDNSBackend(i, inbounds); return target ? [Number(target.id)] : []; })])];
 }

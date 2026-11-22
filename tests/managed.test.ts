@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { configurationView, emptyDocument, reduceDocument, validateDocument, type ManagedDocument } from '../shared/managed';
 import { parseObject, type JsonObject } from '../shared/types';
+import { clientPayload, hydrateClient } from '../src/lib/client-editor';
 
 const uuid = '11111111-1111-4111-8111-111111111111';
 function listener(port: number, clients: JsonObject[] = []): JsonObject {
@@ -96,6 +97,19 @@ describe('Saved server configuration', () => {
     expect(d).toEqual(original);
     delete d.runtime._inboundTraffic;
     expect(configurationView(d, { path: '/panel/api/inbounds/get/1', method: 'GET' })).toMatchObject({ up: 7, down: 9 });
+  });
+  it('keeps an activated first-use plan when an operator edits an unrelated client field', () => {
+    const duration = -30 * 86400000, startedAt = 1700000000000;
+    const d = addInbound(emptyDocument(), 443, [{ email: 'alice', id: uuid, expiryTime: duration, enable: true }]);
+    d.runtime.firstUse = { alice: { identity: uuid, duration, startedAt } };
+    const detail = configurationView(d, { path: '/panel/api/clients/get/alice', method: 'GET' });
+    expect(detail).toMatchObject({ expiryTime: startedAt - duration });
+    const { client } = hydrateClient(detail, 'alice');
+    const update = clientPayload({ ...client, comment: 'New label' }, 'v3');
+    const saved = reduceDocument(d, { path: '/panel/api/clients/update/alice', method: 'POST', body: update }).document;
+    expect(saved.state.clients.alice).toMatchObject({ expiryTime: duration, comment: 'New label' });
+    expect(saved.state.clients.alice).not.toHaveProperty('_firstUse');
+    expect(configurationView(saved, { path: '/panel/api/clients/list', method: 'GET' })).toMatchObject([{ expiryTime: startedAt - duration }]);
   });
   it('returns zero traffic for a client without a checkpoint and authoritative absence for missing records', () => {
     const d = addInbound(emptyDocument(), 443, [{ email: 'alice', id: uuid, enable: true }]);

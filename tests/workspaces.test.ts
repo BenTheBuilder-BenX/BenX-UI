@@ -8,8 +8,8 @@ import { memberPath } from '../shared/workspaces';
 import { ownerPath } from '../worker/workspaces';
 let f: ReturnType<typeof teamFixture>;
 const root: Principal = { username: 'owner', role: 'root' };
-async function account(role = 'reseller', all = false) {
-  const response = await teamRoute(new Request('https://benx.example/api/team', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: role + '-fixture', password: 'synthetic-password-123', role, enabled: true, limits: defaultLimits, permissions: defaultPermissions, grants: [], serverScope: { all, ids: ['assigned'] } }) }), f.env, f.ctx, root);
+async function account(role = 'reseller', all = false, store = false) {
+  const response = await teamRoute(new Request('https://benx.example/api/team', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: role + '-fixture', password: 'synthetic-password-123', role, enabled: true, limits: defaultLimits, permissions: defaultPermissions, grants: [], serverScope: { all, ids: ['assigned'], store } }) }), f.env, f.ctx, root);
   return response.json() as Promise<TeamMember>;
 }
 async function call(path: string, entry = '', cookie = '', method = 'GET', body?: unknown) {
@@ -56,6 +56,15 @@ describe('Separated workspaces and server administrators', () => {
     expect((await call('/api/tunnel-tests', entry, cookie, 'POST', { input: { sourceId: 'assigned', targetId: 'hidden' } })).status).toBe(403);
     expect((await call('/api/servers/assigned/control', entry, cookie, 'POST', { action: 'import', sourceId: 'hidden' })).status).toBe(403);
     expect((await call('/api/servers/assigned', entry, cookie, 'DELETE')).status).toBe(403);
+  });
+  it.each([false, true])('requires an explicit owner grant for an all-server administrator to manage the global shop (%s)', async store => {
+    const admin = await account('admin', true, store), entry = memberPath('admin', admin.id);
+    const row = f.db.prepare('SELECT * FROM team_members WHERE id=?').get(admin.id) as unknown as MemberRow;
+    const cookie = 'benx_admin=' + await issueSession(f.env, row, entry);
+    expect(await (await call('/api/session', entry, cookie)).json()).toMatchObject({ manageStore: store });
+    expect((await call('/api/store', entry, cookie)).status).toBe(store ? 200 : 403);
+    if (store) expect((await call('/api/store', entry, cookie, 'PUT', {config: (await (await call('/api/store', entry, cookie)).json() as {config: object}).config})).status).toBe(200);
+    expect((await call('/api/team', entry, cookie)).status).toBe(403);
   });
   it('includes future connections with all-server access and revokes changed admin sessions', async () => {
     const admin = await account('admin', true), row = f.db.prepare('SELECT * FROM team_members WHERE id=?').get(admin.id) as unknown as MemberRow;

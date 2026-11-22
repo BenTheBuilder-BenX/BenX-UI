@@ -64,6 +64,7 @@ export async function stepTunnelTest(env: Env, id: string) {
       await callRemoteJson(data.peers[receiver], env, { path: `/benx/v1/tunnels/${active.id}/test-start`, method: 'POST', body: { token: active.token, publicProbe: active.method === 'hedioum' } });
       const measured = await callRemoteJson(data.peers[initiator], env, { path: `/benx/v1/tunnels/${active.id}/test-run`, method: 'POST', body: { token: active.token, byteLimit: data.byteLimit } }) as Omit<TunnelTestResult, 'method' | 'testedAt'>;
       if (!['passed', 'failed', 'unsupported'].includes(measured.state)) throw new Error('Invalid test result');
+      if (measured.state === 'passed' && (measured.bytes !== data.byteLimit * 2 || !Number.isFinite(measured.uploadMbps) || !Number.isFinite(measured.downloadMbps) || Number(measured.uploadMbps) <= 0 || Number(measured.downloadMbps) <= 0)) throw new Error('Incomplete bidirectional measurement');
       result = { ...measured, method: active.method, testedAt: Date.now() };
     }
     results.push(result);

@@ -1,7 +1,7 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../worker/control', async original => ({ ...await original<typeof import('../worker/control')>(), reconcileServer: vi.fn(async () => true) }));
-vi.mock('../worker/remote', async original => ({ ...await original<typeof import('../worker/remote')>(), callRemoteJson: vi.fn() }));
-import { callRemoteJson, type StoredServer } from '../worker/remote';
+vi.mock('../worker/remote', async original => ({ ...await original<typeof import('../worker/remote')>(), callRemoteJson: vi.fn(), callRemote: vi.fn() }));
+import { callRemoteJson, callRemote, type StoredServer } from '../worker/remote';
 import { teamRoute, memberLogin, principal, captureUsage, reconcileTeam, accountSubscriptionAllowed, type MemberRow, type Principal, type CustomerRow } from '../worker/team';
 import { issueSession, authenticate, encrypt } from '../worker/security';
 import { createManaged, managedRow, savedDocument } from '../worker/control';
@@ -24,6 +24,30 @@ beforeEach(async () => {
 });
 afterEach(async () => { await Promise.allSettled(f.waits); f.db.close(); });
 describe('Restricted customer accounts', () => {
+  it('shows an acknowledged traffic reset on the next saved dashboard read', async () => {
+    const row = (await managedRow(f.env, 's'))!, d = await savedDocument(f.env, row);
+    d.state.clients.alice = { email: 'alice', id: 'alice-id', inboundIds: [1] };
+    d.runtime = { usage: { alice: { up: 80, down: 20 } }, inbounds: { '1': { up: 110, down: 25 } }, firstUse: { alice: { startedAt: 123 } } };
+    f.db.prepare('UPDATE managed_state SET document=? WHERE server_id=?').run(await encrypt(d, f.env.ENCRYPTION_KEY), 's');
+    const cookie = 'benx_session=' + await issueSession(f.env);
+    const send = (path: string, body?: unknown) => worker.fetch(new Request('https://benx.example/api/servers/s/' + path, {
+      method: body ? 'POST' : 'GET', headers: { Origin: 'https://benx.example', 'Content-Type': 'application/json', Cookie: cookie },
+      body: body ? JSON.stringify(body) : undefined,
+    }) as Parameters<typeof worker.fetch>[0], f.env, f.ctx);
+    const reset = (path: string) => send('request', { method: 'POST', path });
+    const dashboard = async () => (await send('dashboard?saved=1')).json() as Promise<{ inbounds: Array<{ up: number; down: number; clientStats: Array<{ up: number; down: number }> }> }>;
+    vi.mocked(callRemote).mockResolvedValueOnce(Response.json({ success: false, msg: 'Reset unconfirmed' }));
+    expect((await reset('/panel/api/clients/resetTraffic/alice')).status).toBe(502);
+    expect((await dashboard()).inbounds[0].clientStats[0].up).toBe(80);
+    vi.mocked(callRemote).mockImplementation(async () => Response.json({ success: true, obj: { saved: true } }));
+    expect((await reset('/panel/api/inbounds/1/resetTraffic')).status).toBe(200);
+    expect((await dashboard()).inbounds[0]).toMatchObject({ up: 0, down: 0, clientStats: [{ up: 80, down: 20 }] });
+    expect((await reset('/panel/api/clients/resetTraffic/alice')).status).toBe(200);
+    expect((await dashboard()).inbounds[0].clientStats[0]).toMatchObject({ up: 0, down: 0 });
+    const current = (await managedRow(f.env, 's'))!;
+    expect(current.revision).toBe(row.revision);
+    expect((await savedDocument(f.env, current)).runtime.firstUse).toEqual(d.runtime.firstUse);
+  });
   it('hashes passwords, signs a scoped session and revokes it on an account change', async () => {
     const row = f.db.prepare('SELECT * FROM team_members').get() as unknown as MemberRow; expect(JSON.stringify(row)).not.toContain('fixture-seller-password'); expect(await memberLogin(f.env, 'seller', 'wrong')).toBeNull(); expect(await memberLogin(f.env, 'seller', 'fixture-seller-password')).toMatchObject({ id: member.id });
     const token = await issueSession(f.env, row), req = new Request('https://benx.example/api/session', { headers: { cookie: 'benx_session=' + token } });
@@ -40,6 +64,26 @@ describe('Restricted customer accounts', () => {
     const c = (await customers())[0], d = await savedDocument(f.env, (await managedRow(f.env, 's'))!); expect(d.state.clients[c.email]).toMatchObject({ totalGB: 30 * GB, inboundIds: [1], comment: 'مشتری تست' }); expect(d.state.clients[c.email].password).toBeTruthy();
     const response = await (await request('portal', 'GET', undefined, await acting())).json() as { servers: Array<{ inbounds: unknown[] }> }; expect(response.servers[0].inbounds).toHaveLength(1); expect(JSON.stringify(response)).not.toContain('encrypted-fixture'); expect(JSON.stringify(response)).not.toContain(d.state.clients[c.email].password);
     await expect(request('portal/customers', 'POST', { ...body(), inboundIds: [2] }, await acting())).rejects.toMatchObject({ status: 403 });
+  });
+  it('keeps the reseller’s DNS-only grant valid through sale, edit, reconciliation and revocation', async () => {
+    const row = (await managedRow(f.env, 's'))!, d = await savedDocument(f.env, row);
+    d.state.inbounds = [
+      { ...d.state.inbounds[0], protocol: 'masterdnsvpn', port: 53, settings: { DOMAIN: ['t.example.com'], meteredInboundId: 2 } },
+      { ...d.state.inbounds[1], listen: '127.0.0.1', excludeFromSub: true, settings: { decryption: 'none' } },
+    ];
+    f.db.prepare('UPDATE managed_state SET document=? WHERE server_id=?').run(await encrypt(d, f.env.ENCRYPTION_KEY), 's');
+    const actor = await acting();
+    await request('portal/customers', 'POST', body(), actor);
+    const [customer] = await customers();
+    const portal = await (await request('portal', 'GET', undefined, actor)).json() as {customers: Array<{inboundIds: number[]}>};
+    expect(portal.customers[0].inboundIds).toEqual([1]);
+    await request('portal/customers/' + customer.id, 'PUT', { ...body(), name: 'Renewed name', inboundIds: portal.customers[0].inboundIds }, actor);
+    await reconcileTeam(f.env);
+    expect(await accountSubscriptionAllowed(f.env, 's', customer.email)).toBe(true);
+    expect((await savedDocument(f.env, (await managedRow(f.env, 's'))!)).state.clients[customer.email]).toMatchObject({ inboundIds: [1, 2], enable: true });
+    await expect(request('portal/customers/' + customer.id, 'PUT', { ...body(), inboundIds: [2] }, actor)).rejects.toMatchObject({ status: 403 });
+    f.db.prepare('UPDATE team_members SET grants=? WHERE id=?').run('[]', member.id);
+    expect(await accountSubscriptionAllowed(f.env, 's', customer.email)).toBe(false);
   });
   it('does not let URL owner parameters or another customer ID change ownership', async () => {
     await request('portal/customers', 'POST', body(), await acting()); const c = (await customers())[0];
@@ -75,6 +119,35 @@ describe('Restricted customer accounts', () => {
     await request('portal/customers', 'POST', body(), await acting()); const c = (await customers())[0], first = (await savedDocument(f.env, (await managedRow(f.env, 's'))!)).state.clients[c.email].expiryTime;
     await request('portal/customers/' + c.id, 'PUT', { ...body(), days: 10 }, await acting()); expect((await savedDocument(f.env, (await managedRow(f.env, 's'))!)).state.clients[c.email].expiryTime).toBe(first);
     await request('portal/customers/' + c.id, 'PUT', { ...body(), days: 10, renew: true }, await acting()); expect(Number((await savedDocument(f.env, (await managedRow(f.env, 's'))!)).state.clients[c.email].expiryTime)).toBeLessThan(Number(first));
+  });
+  it('counts raw reseller consumption once with fractional weighted customer usage', async () => {
+    await request('portal/customers', 'POST', body(), await acting());
+    const c = (await customers())[0];
+    const server = f.db.prepare('SELECT * FROM servers WHERE id=?').get('s') as unknown as StoredServer;
+    remote.mockResolvedValue({ client: { subId: c.identity }, traffic: { rawUp: 3, rawDown: 5, up: 1.5, down: 2.5 } });
+    await captureUsage(f.env, c, server);
+    await captureUsage(f.env, c, server);
+    expect((await customers())[0]).toMatchObject({ consumed_bytes: 8, last_up: 3, last_down: 5 });
+    const portal = await (await request('portal', 'GET', undefined, await acting())).json() as { customers: Array<{ usedGB: number }> };
+    expect(portal.customers[0].usedGB * GB).toBe(4);
+  });
+  it('retains reseller baselines across missing counters and reads nested 3X-UI traffic', async () => {
+    await request('portal/customers', 'POST', body(), await acting());
+    const c = (await customers())[0];
+    const server = f.db.prepare('SELECT * FROM servers WHERE id=?').get('s') as unknown as StoredServer;
+    remote.mockResolvedValue({ client: { subId: c.identity, traffic: null } });
+    await captureUsage(f.env, c, server);
+    expect((await customers())[0].consumed_bytes).toBe(0);
+    remote.mockResolvedValue({ client: { subId: c.identity, traffic: { up: 19 } } });
+    await expect(captureUsage(f.env, c, server)).rejects.toMatchObject({ status: 502 });
+    remote.mockResolvedValue({ client: { subId: c.identity, traffic: { up: 32, down: 18 } } });
+    await captureUsage(f.env, c, server);
+    expect((await customers())[0].consumed_bytes).toBe(50);
+    remote.mockResolvedValue({ client: { subId: c.identity, traffic: null } });
+    await expect(captureUsage(f.env, c, server)).rejects.toMatchObject({ status: 502 });
+    remote.mockResolvedValue({ client: { subId: c.identity, traffic: { up: 33, down: 20 } } });
+    await captureUsage(f.env, c, server);
+    expect((await customers())[0].consumed_bytes).toBe(53);
   });
   it('archives an account without discarding its customers or consumption and restores with a new session version', async () => {
     await request('portal/customers', 'POST', body(), await acting());

@@ -1019,9 +1019,6 @@ def dispatch(path, method, body):
                 existing = state['clients'].get(email)
                 if not existing:
                     raise AgentError('Client not found.', 404)
-                ledger = accounting.read(sys.modules[__name__], 'accounting.json', {'usage': {}, 'raw': {}})
-                ledger['usage'].pop(email, None)
-                write_private(ROOT / 'accounting.json', json.dumps(ledger))
                 existing['_quotaBlocked'] = False
                 changed.update(existing['inboundIds'])
             elif action == "del":
@@ -1043,9 +1040,9 @@ def dispatch(path, method, body):
         else:
             raise AgentError("This operation requires a 3X-UI panel connection. The native agent manages cores, inbounds and clients.", 501)
         apply_state(state, previous, changed)
-        if path.startswith('/panel/api/clients/') and method == 'POST' and action in ['del', 'update']:
+        if path.startswith('/panel/api/clients/') and method == 'POST' and action in ['del', 'update', 'resetTraffic']:
             ledger = accounting.read(sys.modules[__name__], 'accounting.json', {'usage': {}, 'raw': {}})
-            if action == 'del':
+            if action in ['del', 'resetTraffic']:
                 ledger['usage'].pop(email, None)
             elif email != client['email']:
                 ledger['usage'][client['email']] = ledger['usage'].pop(email, {'up': 0, 'down': 0, 'rawUp': 0, 'rawDown': 0})

@@ -1,6 +1,7 @@
 import { configurationView, withDefaultPublicHost, emptyDocument, isManagedMutation, reduceDocument, validateDocument, type ManagedDocument } from '../shared/managed';
 import { validatePolicy } from '../shared/policy';
 import { parseObject, type JsonObject, type RemoteRequest } from '../shared/types';
+import { reportedClientTraffic } from '../shared/client-usage';
 import { portableCopy } from '../shared/portable-profile';
 import { operationMode } from './operation-mode';
 import { callRemoteJson, type StoredServer } from './remote';
@@ -21,15 +22,23 @@ export async function saveManaged(env: Env, row: ManagedRow, document: ManagedDo
   const manual = await operationMode(env) === 'manual';
   if (manual && row.bound && Number(row.requested_revision || 0) > row.applied_revision && row.phase !== 'failed') throw new HttpError(409, 'Wait for the submitted job to finish before saving another batch. Refresh synchronization status.');
   const secret = await encrypt(validateDocument(document), env.ENCRYPTION_KEY), now = Date.now();
-  const result = await env.DB.prepare("UPDATE managed_state SET document=?,revision=revision+1,phase='pending',requested_revision=applied_revision,error='',updated_at=? WHERE server_id=? AND revision=? AND (lease_until<? OR lease LIKE 'sync:%') AND (?=0 OR bound=0 OR requested_revision<=applied_revision OR phase='failed') RETURNING revision")
-    .bind(secret, now, row.server_id, row.revision, now, manual ? 1 : 0).first<{ revision: number }>();
-  if (!result) throw new HttpError(409, 'This server changed or is applying a configuration. Refresh and retry.');
-  await env.DB.prepare('INSERT INTO managed_versions(server_id,revision,document,created_at) VALUES(?,?,?,?)').bind(row.server_id, result.revision, secret, now).run();
-  await env.DB.prepare('DELETE FROM managed_versions WHERE server_id=? AND revision<?').bind(row.server_id, result.revision - 19).run();
-  // Policies are also retained in the existing table for subscription/store readers.
-  await env.DB.prepare('INSERT INTO server_policy(server_id,revision,data,updated_at) VALUES(?,?,?,?) ON CONFLICT(server_id) DO UPDATE SET revision=excluded.revision,data=excluded.data,updated_at=excluded.updated_at')
-    .bind(row.server_id, document.policy.revision, JSON.stringify(document.policy), now).run();
-  return result.revision;
+  const revision = row.revision + 1;
+  const committed = 'SELECT 1 FROM managed_state WHERE server_id=? AND revision=? AND document=?';
+  const guard = [row.server_id, revision, secret];
+  const [updated] = await env.DB.batch([
+    env.DB.prepare(`UPDATE managed_state SET document=?, revision=revision+1, phase='pending', requested_revision=applied_revision, error='', updated_at=?
+      WHERE server_id=? AND revision=? AND document=? AND (lease_until<? OR lease LIKE 'sync:%')
+      AND (?=0 OR bound=0 OR requested_revision<=applied_revision OR phase='failed')`)
+      .bind(secret, now, row.server_id, row.revision, row.document, now, Number(manual)),
+    env.DB.prepare(`INSERT INTO managed_versions(server_id,revision,document,created_at)
+      SELECT server_id,revision,document,updated_at FROM managed_state WHERE server_id=? AND revision=? AND document=?`).bind(...guard),
+    env.DB.prepare(`DELETE FROM managed_versions WHERE server_id=? AND revision<? AND EXISTS(${committed})`).bind(row.server_id, revision - 19, ...guard),
+    env.DB.prepare(`INSERT INTO server_policy(server_id,revision,data,updated_at) SELECT ?,?,?,? WHERE EXISTS(${committed})
+      ON CONFLICT(server_id) DO UPDATE SET revision=excluded.revision,data=excluded.data,updated_at=excluded.updated_at`)
+      .bind(row.server_id, document.policy.revision, JSON.stringify(document.policy), now, ...guard),
+  ]);
+  if (!updated.meta.changes) throw new HttpError(409, 'This server changed or is applying a configuration. Refresh and retry.');
+  return revision;
 }
 interface PanelBinding { serverId: string; inbounds: Record<string, number>; nodes: Record<string, number>; hosts: Record<string, string>; nodeGuids: Record<string, string>; nodeTokenHashes: Record<string, string>; outboundSubs: Record<string, number>; subBalancers: Record<string, number> }
 interface PanelCollections { format: 1; groups: JsonObject[]; outboundSubs: JsonObject[]; subBalancers: JsonObject[]; fallbacks: Record<string, JsonObject[]>; subscriptionOutbounds: JsonObject[]; outboundTestUrl: string }
@@ -214,7 +223,7 @@ export async function remoteDocument(env: Env, server: StoredServer): Promise<Ma
       const detail = parseObject(await callRemoteJson(server, env, { path: `/panel/api/clients/get/${encodeURIComponent(email)}`, method: 'GET' }));
       const addresses = parseObject(detail.tunnelAllowedIPs);
       d.state.clients[email] = { ...clientPayload({ ...parseObject(detail.client), ...c }), inboundIds: row.inboundIds || detail.inboundIds || [], externalLinks: externalLinks(detail.externalLinks || []), ...(Object.keys(addresses).length ? { allowedIPsByInbound: Object.fromEntries(Object.entries(addresses).map(([id, value]) => [id, Array.isArray(value) ? value : String(value).split(',').map(v => v.trim()).filter(Boolean)])) } : {}) };
-      d.runtime[email] = row.traffic || {};
+      d.runtime[email] = reportedClientTraffic(row) ?? reportedClientTraffic(detail) ?? {};
     }
     // Nodes/hosts must be readable in full, otherwise there is no complete migration.
     d.nodes = objectRows(await callRemoteJson(server, env, { path: '/panel/api/nodes/list', method: 'GET' }), 'node');
@@ -484,7 +493,7 @@ export async function applyPanel(env: Env, server: StoredServer, d: ManagedDocum
     if (Array.isArray(result.skipped) && result.skipped.length) throw new HttpError(409, 'A restored client was skipped by the remote panel. Refresh and retry before treating this server as synchronized.');
   }
   for (const [email, raw] of Object.entries(d.state.clients)) {
-    const ids = mappedIds(raw.inboundIds, binding.inbounds, 'client'), encoded = encodeURIComponent(email), prior = liveClients.find(r => parseObject(r.client || r).email === email), wanted = translateReferences(effectiveClient(raw, prior?.traffic || d.runtime[email], activation[email]), binding) as JsonObject;
+    const ids = mappedIds(raw.inboundIds, binding.inbounds, 'client'), encoded = encodeURIComponent(email), prior = liveClients.find(r => parseObject(r.client || r).email === email), wanted = translateReferences(effectiveClient(raw, reportedClientTraffic(prior ?? {}) ?? d.runtime[email], activation[email]), binding) as JsonObject;
     const detail = Object.keys(parseObject(raw.allowedIPsByInbound)).length || raw.externalLinks !== undefined ? parseObject(await request(`/panel/api/clients/get/${encoded}`)) : {};
     if (prior) {
       if (!matchesDesired(clientComparable(parseObject(prior.client || prior)), clientComparable(wanted)) || !hasTunnelAddresses(detail, raw, binding)) await request(`/panel/api/clients/update/${encoded}`, 'POST', wanted);
@@ -520,7 +529,7 @@ export async function applyPanel(env: Env, server: StoredServer, d: ManagedDocum
   const confirmedClients = objectRows(await request('/panel/api/clients/export'), 'client');
   if (confirmedClients.length !== Object.keys(d.state.clients).length) throw new HttpError(409, 'The panel has not confirmed the complete saved client list.');
   for (const [email, c] of Object.entries(d.state.clients)) {
-    const actual = confirmedClients.find(r => parseObject(r.client || r).email === email), desired = translateReferences(effectiveClient(c, actual?.traffic || d.runtime[email], activation[email]), binding) as JsonObject;
+    const actual = confirmedClients.find(r => parseObject(r.client || r).email === email), traffic = reportedClientTraffic(actual ?? {}) ?? d.runtime[email], desired = translateReferences(effectiveClient(c, traffic, activation[email]), binding) as JsonObject;
     const actualFields = clientComparable(parseObject(actual?.client || actual)), desiredFields = clientComparable(desired);
     const differentFields = Object.keys(desiredFields).filter(key => !matchesDesired(actualFields[key], desiredFields[key])).filter(key => /^[a-zA-Z][a-zA-Z0-9]{0,40}$/.test(key));
     const attachmentsMatch = actual && stable((actual.inboundIds as number[] || []).slice().sort((a, b) => a - b)) === stable(mappedIds(c.inboundIds, binding.inbounds, 'client').sort((a, b) => a - b));
@@ -531,7 +540,7 @@ export async function applyPanel(env: Env, server: StoredServer, d: ManagedDocum
     }
     if (Number(c.expiryTime) < 0 && Number(parseObject(actual.client || actual).expiryTime) === Number(c.expiryTime)) activation[email] = { duration: Number(c.expiryTime) };
     else if (Number(c.expiryTime) >= 0) delete activation[email];
-    d.runtime[email] = actual.traffic || d.runtime[email] || {};
+    d.runtime[email] = traffic ?? {};
   }
   const confirmedHosts = objectRows(await request('/panel/api/hosts/list'), 'host');
   if (confirmedHosts.length !== d.hosts.length || d.hosts.some(h => { const groupId = binding.hosts[String(h.id || h.groupId)], wanted = translateReferences({ ...h, groupId, inboundIds: mappedIds(h.inboundIds, binding.inbounds, 'host group') }, binding) as JsonObject; delete wanted.id; return !matchesDesired(confirmedHosts.find(n => n.groupId === groupId || n.id === groupId), wanted); })) throw new HttpError(409, 'The panel has not confirmed the saved host groups.');

@@ -1,5 +1,5 @@
 export type MemberRole = 'admin' | 'manager' | 'reseller';
-export interface ServerScope { all: boolean; ids: string[] }
+export interface ServerScope { all: boolean; ids: string[]; store?: boolean }
 export interface MemberLimits { customers: number; quotaGB: number; days: number; allocationGB: number; consumptionGB: number; ip: number; hwid: number }
 export interface MemberPermissions { create: boolean; edit: boolean; remove: boolean; share: boolean }
 export interface MemberGrant { serverId: string; inboundIds: number[] }
@@ -12,6 +12,7 @@ export function validateMember(input: unknown) {
   const b = input as Partial<TeamMember> & { password?: string };
   if (!b || typeof b.username !== 'string' || !/^[\p{L}\p{N}_.-]{3,64}$/u.test(b.username) || !['admin', 'manager', 'reseller'].includes(String(b.role)) || typeof b.enabled !== 'boolean') throw new Error('Enter a valid account name, role and status.');
   if (b.role === 'admin' && (!b.serverScope || typeof b.serverScope.all !== 'boolean' || !Array.isArray(b.serverScope.ids) || b.serverScope.ids.length > 50 || b.serverScope.ids.some(id => typeof id !== 'string' || !id))) throw new Error('Choose all servers or specific administrator servers.');
+  if (b.serverScope?.store !== undefined && (typeof b.serverScope.store !== 'boolean' || b.serverScope.store && (b.role !== 'admin' || !b.serverScope.all))) throw new Error('Store access requires an all-server administrator.');
   if (b.password !== undefined && (typeof b.password !== 'string' || b.password.length < 12 || b.password.length > 1024)) throw new Error('Use a password of at least 12 characters.');
   for (const key of Object.keys(defaultLimits) as Array<keyof MemberLimits>) if (!Number.isFinite(b.limits?.[key]) || Number(b.limits?.[key]) < 0 || Number(b.limits?.[key]) > 10000000 || ['customers', 'days', 'ip', 'hwid'].includes(key) && !Number.isInteger(b.limits?.[key])) throw new Error('Limits must be between 0 and 10,000,000; customer, day and device limits must be whole numbers.');
   for (const key of Object.keys(defaultPermissions) as Array<keyof MemberPermissions>) if (typeof b.permissions?.[key] !== 'boolean') throw new Error('Choose the customer permissions.');

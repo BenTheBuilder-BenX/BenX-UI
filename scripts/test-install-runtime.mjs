@@ -59,6 +59,7 @@ try {
   assert.equal(rejectedPoll.status, 401);
   const listed = await (await call('/api/servers', 'GET', undefined, cookie, owner.entryPath)).json();
   assert.equal(listed.length, 1); assert.equal(listed[0].id, enrollment.id);
+  assert.equal(listed[0].online, undefined, 'A new server has no health check yet');
   assert.ok(!JSON.stringify(listed).includes(pairingToken));
   assert.equal((await call('/sub/invalid')).status, 404);
   console.log(JSON.stringify({ runtime: 'Cloudflare local workerd + D1', automaticSchema: 'passed', firstInstallClaim: 'passed', activationAndGeneratedLogin: 'passed', seedRejected: 'passed', credentialChangeAndSessionRevocation: 'passed', originalRecoveryKeys: 'passed', authenticatedReadRoutes: reads.length, anonymousIsolation: 'passed', originRejection: 'passed', outboundEnrollmentPairingPolling: 'passed', credentialRedaction: 'passed', liveAccountWrites: false }));

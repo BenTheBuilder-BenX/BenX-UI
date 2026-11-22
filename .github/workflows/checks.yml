@@ -3,6 +3,17 @@ on: [push, pull_request, workflow_dispatch]
 permissions:
   contents: read
 jobs:
+  tunnel-transports:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tunnel clients on the disposable runner
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends iproute2 openssh-server wireguard-tools
+      - name: Transfer authenticated traffic through each supported tunnel
+        run: sudo /usr/bin/python3 scripts/test-tunnel-transports.py
   local-checks:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -17,6 +28,8 @@ jobs:
           python-version: '3.12'
       - run: npm ci
       - run: npm run release:check
+      - name: Verify per-customer MasterDNS traffic and cutoff
+        run: python -X utf8 scripts/test-masterdns-metering.py --fetch-linux
       - run: npm run release:package
       - uses: actions/upload-artifact@v4
         with:

@@ -5,6 +5,9 @@ export interface ClientPolicy { serviceId: string; multiplier: number; overrides
 export interface SubscriptionProfile { baseUrl: string; enabled: boolean; options: Record<string, string | number | boolean> }
 export interface ServerPolicy { revision: number; subscriptionOrigin?: string; services: ServicePlan[]; inboundMultipliers: Record<string, number>; clients: Record<string, ClientPolicy>; subscriptions: Record<string, SubscriptionProfile> }
 export const subscriptionFormats = ['v2ray', 'v2box', 'singbox', 'clash', 'happ'] as const;
+export function enabledSubscriptionFormats(policy: ServerPolicy, plan?: ServicePlan) {
+  return subscriptionFormats.filter(format => policy.subscriptions[format]?.enabled !== false && (!plan || plan.formats.includes(format)));
+}
 export const formatNames: Record<string, string> = { v2ray: 'V2Ray / standard', v2box: 'V2Box', singbox: 'sing-box', clash: 'Clash / Mihomo', happ: 'Happ' };
 export function validClientName(email: unknown): email is string { return typeof email === 'string' && /^[^\s/\\]{1,128}$/.test(email) && !['__proto__', 'constructor', 'prototype'].includes(email) && Array.from(email).every(c => c.charCodeAt(0) >= 32 && c.charCodeAt(0) !== 127); }
 export function newPolicy(): ServerPolicy { return { revision: 0, services: [], inboundMultipliers: {}, clients: {}, subscriptions: {} }; }

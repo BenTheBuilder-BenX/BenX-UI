@@ -74,9 +74,20 @@ describe('Durable tunnel comparison', () => {
     await stepTunnelTest(env, id); const saved = await decrypt<{ current: { id: string } }>(row().data as string, env.ENCRYPTION_KEY); expect(row().state).toBe('running'); expect(JSON.parse(row().results as string)).toEqual([]);
     remote.mockImplementation(base); remote.mockClear(); await stepTunnelTest(env, id); expect(remote.mock.calls.find(c => c[2].path.endsWith('/prepare'))![2].path).toContain(saved.current.id); expect(row().state).toBe('completed');
   });
-  it('measures FRP reverse traffic in the correct direction', async () => {
-    await seed('frp-wss'); await stepTunnelTest(env, id);
-    expect(remote.mock.calls.find(c => c[2].path.endsWith('/test-start'))![0].id).toBe('source'); expect(remote.mock.calls.find(c => c[2].path.endsWith('/test-run'))![0].id).toBe('target');
+  it('rejects a passed result without the requested bytes in both directions and still cleans up', async () => {
+    await seed('ssh-direct'); const base = remote.getMockImplementation()!;
+    remote.mockImplementation(async (...args) => args[2].path.endsWith('/test-run') ? {state: 'passed', bytes: 0} : base(...args));
+    await stepTunnelTest(env, id);
+    expect(JSON.parse(row().results as string)[0]).toMatchObject({state: 'failed', cleanup: 'Confirmed on both servers'});
+  });
+  it.each([
+    ['wireguard', 'target', 'source'], ['ssh-direct', 'target', 'source'], ['ssh-reverse', 'source', 'target'],
+    ['frp-tls', 'source', 'target'], ['frp-wss', 'source', 'target'],
+  ])('measures %s in the forwarding direction and confirms cleanup', async (method, responder, initiator) => {
+    await seed(method); await stepTunnelTest(env, id);
+    expect(remote.mock.calls.find(c => c[2].path.endsWith('/test-start'))![0].id).toBe(responder);
+    expect(remote.mock.calls.find(c => c[2].path.endsWith('/test-run'))![0].id).toBe(initiator);
+    expect(JSON.parse(row().results as string)[0]).toMatchObject({state: 'passed', cleanup: 'Confirmed on both servers'});
   });
   it('uses an explicit authenticated public target probe for Hedioum', async () => {
     await seed('hedioum'); await stepTunnelTest(env, id);

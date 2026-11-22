@@ -50,6 +50,39 @@ beforeEach(async () => {
 afterEach(() => { db.close(); remote.mockReset(); });
 
 describe('Native desired-state reconciliation', () => {
+  it('reads existing native listeners on a live dashboard refresh before a profile is imported', async () => {
+    const listeners = profile().state.inbounds;
+    remote.mockImplementation(async (_server, _env, input) => input.path.endsWith('/inbounds/list') ? listeners : { cpu: 12 });
+    const snapshot = async (saved: boolean) => (await dashboard(new Request('https://benx.test/?saved=' + Number(saved)), env, server, {} as ExecutionContext)).json();
+    expect(await snapshot(true)).toMatchObject({ inbounds: [], control: null });
+    expect(remote).not.toHaveBeenCalled();
+    expect(await snapshot(false)).toMatchObject({ status: { cpu: 12 }, inbounds: listeners, error: '' });
+    expect(await managedRow(env, server.id)).toBeNull();
+    remote.mockImplementation(async (_server, _env, input) => input.path.endsWith('/inbounds/list') ? null : { cpu: 12 });
+    expect(await snapshot(false)).toMatchObject({ status: { cpu: 12 }, inboundsAvailable: false, error: expect.stringMatching(/inbound/i) });
+  });
+  it('rolls back a profile edit when writing its revision history fails', async () => {
+    const d = profile();
+    await createManaged(env, 's', d);
+    const before = (await managedRow(env, 's'))!;
+    db.exec("CREATE TEMP TRIGGER fail_history BEFORE INSERT ON managed_versions BEGIN SELECT RAISE(ABORT, 'fixture history unavailable'); END");
+    d.state.inbounds[0].remark = 'Proposed edit';
+    await expect(saveManaged(env, before, d)).rejects.toThrow('fixture history unavailable');
+    expect(await managedRow(env, 's')).toEqual(before);
+    expect(db.prepare('SELECT COUNT(*) AS n FROM managed_versions').get()).toEqual({ n: 1 });
+  });
+  it('keeps fresh traffic checkpoints when an edit began from the same configuration revision', async () => {
+    await createManaged(env, 's', profile());
+    const before = (await managedRow(env, 's'))!, edited = await savedDocument(env, before);
+    remote.mockResolvedValue({ usage: { alice: { up: 100, down: 50 } } });
+    expect(await refreshUsage(env, server)).toBe(true);
+    edited.state.clients.alice.comment = 'My edit';
+    await expect(saveManaged(env, before, edited)).rejects.toMatchObject({ status: 409 });
+    const latest = (await managedRow(env, 's'))!, retry = await savedDocument(env, latest);
+    retry.state.clients.alice.comment = 'My edit';
+    expect(await saveManaged(env, latest, retry)).toBe(2);
+    expect(await desired()).toMatchObject({ state: { clients: { alice: { comment: 'My edit' } } }, runtime: { usage: { alice: { up: 100, down: 50 } } } });
+  });
   it('keeps saved inbounds available when live metrics have an invalid CPU value', async () => {
     db.exec("UPDATE operation_settings SET mode='manual'");
     await createManaged(env, 's', profile());
@@ -308,6 +341,34 @@ describe('Native desired-state reconciliation', () => {
 
 
 describe('Scheduled read-only usage refresh', () => {
+  it('reflects native resets in the saved dashboard and keeps unreported optional ledgers', async () => {
+    db.exec("UPDATE operation_settings SET mode='manual'");
+    const d = profile();
+    d.runtime = { usage: { alice: { up: 90, down: 10 } }, inbounds: { '2': { up: 90, down: 10 } }, firstUse: { alice: { startedAt: 123 } } };
+    await createManaged(env, 's', d);
+    remote.mockResolvedValue({ usage: {}, inbounds: {} });
+    expect(await refreshUsage(env, server)).toBe(true);
+    const refreshed = await desired();
+    expect(refreshed.runtime.usage).toEqual({});
+    expect(refreshed.runtime.inbounds).toEqual({});
+    expect(refreshed.runtime.firstUse).toEqual(d.runtime.firstUse);
+    const snapshot = await dashboard(new Request('https://benx.test/?saved=1'), env, server, {} as ExecutionContext);
+    expect(await snapshot.json()).toMatchObject({ inbounds: [
+      { up: 0, down: 0, clientStats: [{ email: 'alice', up: 0, down: 0 }] },
+      { up: 0, down: 0, clientStats: [{ email: 'alice', up: 0, down: 0 }] },
+    ] });
+    remote.mockResolvedValue({ usage: {}, firstUse: {} });
+    await refreshUsage(env, server);
+    expect((await desired()).runtime.firstUse).toEqual({});
+  });
+  it('keeps the last native snapshot when a reported counter collection is malformed', async () => {
+    const d = profile();
+    d.runtime = { usage: { alice: { up: 10, down: 20 } }, inbounds: { '2': { up: 10, down: 20 } } };
+    await createManaged(env, 's', d);
+    remote.mockResolvedValue({ usage: {}, inbounds: [] });
+    await expect(refreshUsage(env, server)).rejects.toThrow();
+    expect((await desired()).runtime).toEqual(d.runtime);
+  });
   it('refreshes counters in Manual mode without applying drafts or changing the saved revision', async () => {
     db.exec("UPDATE operation_settings SET mode='manual'");
     await createManaged(env,'s',profile());

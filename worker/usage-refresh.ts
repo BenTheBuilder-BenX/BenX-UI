@@ -1,7 +1,9 @@
-import { managedRow, savedDocument } from './control';
+import { managedRow, savedDocument, type ManagedRow } from './control';
 import { callRemoteJson, type StoredServer } from './remote';
 import { encrypt, HttpError, readJson } from './security';
 import { parseObject, type JsonObject } from '../shared/types';
+import { reportedClientTraffic } from '../shared/client-usage';
+import type { ManagedDocument } from '../shared/managed';
 
 export async function usageRefreshRoute(request: Request, env: Env, owner: boolean) {
   if (!owner) throw new HttpError(403, 'Only the owner can configure scheduled usage refresh.');
@@ -30,12 +32,20 @@ export async function refreshUsage(env: Env, server: StoredServer) {
   const d = await savedDocument(env,row);
   if (server.kind === 'server') {
     const ledger = parseObject(await callRemoteJson(server,env,{path:'/benx/v1/accounting',method:'GET'}));
-    if (!ledger.usage || typeof ledger.usage !== 'object' || Array.isArray(ledger.usage)) throw new Error('Usage unavailable');
-    for (const key of ['usage','inbounds','firstUse']) d.runtime[key] = { ...parseObject(d.runtime[key]), ...parseObject(ledger[key]) };
+    for (const key of ['usage', 'inbounds', 'firstUse']) {
+      const snapshot = ledger[key];
+      if (snapshot === undefined && key !== 'usage') continue;
+      if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) throw new Error('Usage unavailable');
+      // The agent sends complete collections. A reset removes its row from the ledger.
+      d.runtime[key] = snapshot;
+    }
   } else {
     const rows = await callRemoteJson(server,env,{path: server.version === 'v3' ? '/panel/api/clients/list' : '/panel/api/inbounds/list',method:'GET'});
     if (!Array.isArray(rows)) throw new Error('Usage unavailable');
-    if (server.version === 'v3') for (const raw of rows) { const r = parseObject(raw), c = parseObject(r.client || r); if (d.state.clients[String(c.email)]) d.runtime[String(c.email)] = parseObject(r.traffic); }
+    if (server.version === 'v3') for (const raw of rows) {
+      const detail = parseObject(raw), client = parseObject(detail.client ?? detail), traffic = reportedClientTraffic(detail);
+      if (traffic && d.state.clients[String(client.email)]) d.runtime[String(client.email)] = traffic;
+    }
     else for (const raw of rows) {
       const i = parseObject(raw), binding = parseObject(parseObject(d.runtime._benxPanelBinding).inbounds);
       const logical = Object.keys(binding).find(id => Number(binding[id]) === Number(i.id)) || String(i.id);
@@ -44,10 +54,40 @@ export async function refreshUsage(env: Env, server: StoredServer) {
     }
   }
   d.runtime.usageRefreshedAt = Date.now();
-  const encrypted = await encrypt(d,env.ENCRYPTION_KEY);
-  // Fence against concurrent edits, jobs and credential changes. Preserve revision and phase.
-  const updated = await env.DB.prepare('UPDATE managed_state SET document=? WHERE server_id=? AND revision=? AND document=? AND lease_until<? AND EXISTS(SELECT 1 FROM servers WHERE id=? AND url=? AND credentials=? AND enabled=1) RETURNING server_id').bind(encrypted,server.id,row.revision,row.document,Date.now(),server.id,server.url,server.credentials).first();
+  return saveUsageSnapshot(env, server, row, d);
+}
+
+async function saveUsageSnapshot(env: Env, server: StoredServer, row: ManagedRow, document: ManagedDocument) {
+  const encrypted = await encrypt(document, env.ENCRYPTION_KEY);
+  const updated = await env.DB.prepare(`UPDATE managed_state SET document=? WHERE server_id=? AND revision=? AND document=?
+    AND bound=1 AND lease_until<? AND phase NOT IN ('applying','running','syncing')
+    AND EXISTS(SELECT 1 FROM servers WHERE id=? AND url=? AND credentials=? AND enabled=1) RETURNING server_id`)
+    .bind(encrypted, server.id, row.revision, row.document, Date.now(), server.id, server.url, server.credentials).first();
   return Boolean(updated);
+}
+
+/** Reflect only the counters covered by an acknowledged upstream reset. */
+export async function recordTrafficReset(env: Env, server: StoredServer, row: ManagedRow, d: ManagedDocument, path: string, ctx: ExecutionContext) {
+  const client = path.match(/^\/panel\/api\/clients\/resetTraffic\/([^/]+)$/);
+  const inbound = path.match(/^\/panel\/api\/inbounds\/(\d+)\/resetTraffic$/);
+  if (client || path === '/panel/api/clients/resetAllTraffics') {
+    const emails = client ? [decodeURIComponent(client[1])] : Object.keys(d.state.clients);
+    for (const email of emails) {
+      if (!Object.hasOwn(d.state.clients, email)) continue;
+      if (d.mode === 'native') delete parseObject(d.runtime.usage)[email];
+      else d.runtime[email] = { ...parseObject(d.runtime[email]), up: 0, down: 0 };
+    }
+  } else if (inbound || path === '/panel/api/inbounds/resetAllTraffics') {
+    const key = d.mode === 'native' ? 'inbounds' : '_inboundTraffic';
+    const counters = parseObject(d.runtime[key]);
+    const ids = inbound ? [inbound[1]] : d.state.inbounds.map(i => String(i.id));
+    for (const id of ids) counters[id] = { ...parseObject(counters[id]), up: 0, down: 0 };
+    d.runtime[key] = counters;
+  } else return;
+  // If another edit or checkpoint won, read fresh counters without replaying the reset.
+  if (!await saveUsageSnapshot(env, server, row, d).catch(() => false)) {
+    ctx.waitUntil(refreshUsage(env, server).catch(() => false));
+  }
 }
 
 export async function refreshUsageFleet(env: Env) {

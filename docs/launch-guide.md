@@ -1,12 +1,12 @@
 # BenX 0.9 · installation and launch guide
 
-This is a local source candidate. Publishing, GitHub creation and real VPS acceptance are separate steps. Start with one spare VPS and a staging Worker. BenX is the panel; an installed third-party panel is optional.
+Start with a spare VPS and a staging Worker. BenX includes a native panel and can also connect to supported 3X-UI servers. [Operator guide](operator-guide.md) · [راهنمای فارسی](operator-guide.fa.md)
 
 ## 1. Prepare your own Cloudflare installation
 
 Requirements: Node.js 24, Python 3.11+ for agent tests/source packaging, a Cloudflare account with Workers and D1, and a fresh supported Linux VPS. The panel and subscriptions live on the Worker; packet processing stays on the VPS.
 
-Follow [easy installation](easy-install.md). The preferred path is the official Deploy to Cloudflare button on the future public GitHub repository. It clones the source into your account, provisions D1 and runs the build/deployment helper. No download, manual database ID or secret choices are required. The public repository has not been created yet; the button is attached only when its actual URL exists.
+Use the official Deploy to Cloudflare button in the [public README](../README.md). It copies the source into your account, provisions D1 and runs the deployment helper. [Installation guide](easy-install.md)
 
 For command-line installation, use a clean checkout or the source kit, which includes sanitized `wrangler.jsonc` defaults. Do not upload the original operational workspace. When using the original workspace, copy `wrangler.example.jsonc` into a **separate staging checkout** first; never overwrite a live configuration accidentally.
 
@@ -78,7 +78,7 @@ GRE/IPIP, unencrypted Backhaul and experimental Phormal/Hedioum recipes are reti
 
 ## 6. Shops and resellers
 
-Create Services, assign supported inbounds and quota policy, then configure Team & Resellers and the Telegram shop. Automatic native shop delivery is limited to the supported VLESS, VMess, Trojan and Shadowsocks products; other cores remain manual profile workflows. All advertised restrictions must be enforceable by that adapter.
+Enable a service and its subscription formats, then configure the Telegram shop as the owner or a delegated shop administrator. It automatically provisions supported 3X-UI 3.x plans or native VLESS, VMess, Trojan, Shadowsocks and MasterDNS plans. Pair MasterDNS with private VLESS when selling a capped or expiring service. [Telegram setup and delivery](operator-guide.md#telegram)
 
 Use a staging bot and conduct a real buyer checkout, duplicate-payment handling, delivery retry, customer retrieval, quota/expiry and refund test. Card receipts require a human bank-deposit check. A mocked provider response is not a live payment test. The `/telegram/webhook` route needs public reachability and its own webhook-secret authentication.
 
@@ -91,8 +91,8 @@ Use a staging bot and conduct a real buyer checkout, duplicate-payment handling,
 - Existing native replacement/standby workflows preserve supported saved profiles and credentials. Automatic replacement still uses SSH setup; outbound-agent reassignment/cutover to an existing logical server ID is not implemented. For a fresh outbound target, use portable export/import and manually verify DNS/customer identity implications before cutover. Do not claim subscription continuity for a newly created logical server.
 - Test recovery on a spare VPS. Verify client credentials, accounting checkpoint, certificates, DNS, subscription identity and tunnel endpoints before retiring the old host. Recovery is not an OS image, firewall clone or complete host backup. Usage since the last confirmed checkpoint on a lost VPS cannot be recovered.
 
-## 8. Prepare GitHub without publishing
+## 8. Prepare a source release
 
-Run `npm run release:check`, then `npm run release:package`. The latter creates a clean allowlisted source folder and ZIP under `test-results/release/` with SHA-256 sums and sanitized Cloudflare defaults. It excludes private runtime files, live scripts, account IDs, original font binaries, local caches and deployment state. Review `SOURCE-KIT.txt` and the archive before creating any repository.
+Run `npm run release:check` and `npm run release:package`. Inspect the allowlisted source folder, ZIP and SHA-256 sums in `test-results/release/`. Publish from that clean source tree to keep operational configuration and credentials private.
 
-The included GitHub workflow runs tests/build/package; it never deploys. No repository, remote, commit, push, release or deployment is created by source packaging. For later publication, initialize Git **inside the clean source folder**, inspect the file list and create the repository only when explicitly requested. Attach its actual URL with `npm run release:repository -- <actual-public-repository-url>`, then commit that change. The official Deploy button can then install into each user's own Cloudflare account. GPL-3.0 and upstream notices remain; review third-party asset licenses before redistribution.
+GitHub Actions verifies the source and packages it. Operators can use the README Deploy button to install in their own Cloudflare account. See [the acceptance guide](release-acceptance.md) for checks on a real deployment.

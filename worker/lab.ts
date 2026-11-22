@@ -57,7 +57,7 @@ export async function labRoute(request: Request, env: Env, ctx: ExecutionContext
     const token = Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, '0')).join(''), secret = await encrypt(generated.document, env.ENCRYPTION_KEY), now = Date.now(), data = await encrypt({ spec, token, variants: generated.variants }, env.ENCRYPTION_KEY);
     const fence = 'EXISTS(SELECT 1 FROM managed_state WHERE server_id=? AND revision=? AND document=?)', values = [server.id, row.revision + 1, secret];
     const results = await env.DB.batch([
-      env.DB.prepare("UPDATE managed_state SET document=?,revision=revision+1,phase='pending',error='',updated_at=? WHERE server_id=? AND revision=? AND lease_until<? AND bound=1 AND EXISTS(SELECT 1 FROM servers WHERE id=? AND enabled=1 AND is_candidate=0)").bind(secret, now, server.id, row.revision, now, server.id),
+      env.DB.prepare("UPDATE managed_state SET document=?,revision=revision+1,phase='pending',error='',updated_at=? WHERE server_id=? AND revision=? AND document=? AND lease_until<? AND bound=1 AND EXISTS(SELECT 1 FROM servers WHERE id=? AND enabled=1 AND is_candidate=0)").bind(secret, now, server.id, row.revision, row.document, now, server.id),
       env.DB.prepare(`INSERT INTO lab_experiments(id,server_id,name,data,revision,created_at) SELECT ?,?,?,?,?,? WHERE ${fence}`).bind(id, server.id, spec.name.trim(), data, row.revision + 1, now, ...values),
       env.DB.prepare(`INSERT INTO managed_versions(server_id,revision,document,created_at) SELECT ?,?,?,? WHERE ${fence}`).bind(server.id, row.revision + 1, secret, now, ...values),
     ]);
@@ -90,7 +90,7 @@ export async function labRoute(request: Request, env: Env, ctx: ExecutionContext
   }
   const secret = await encrypt(d, env.ENCRYPTION_KEY), now = Date.now();
   const result = await env.DB.batch([
-    env.DB.prepare("UPDATE managed_state SET document=?,revision=revision+1,phase='pending',error='',updated_at=? WHERE server_id=? AND revision=? AND lease_until<?").bind(secret, now, row.server_id, managed.revision, now),
+    env.DB.prepare("UPDATE managed_state SET document=?,revision=revision+1,phase='pending',error='',updated_at=? WHERE server_id=? AND revision=? AND document=? AND lease_until<?").bind(secret, now, row.server_id, managed.revision, managed.document, now),
     env.DB.prepare("UPDATE lab_experiments SET state='removed' WHERE id=? AND data=? AND EXISTS(SELECT 1 FROM managed_state WHERE server_id=? AND document=?)").bind(row.id, row.data, row.server_id, secret),
     env.DB.prepare('INSERT INTO managed_versions(server_id,revision,document,created_at) SELECT ?,?,?,? WHERE EXISTS(SELECT 1 FROM managed_state WHERE server_id=? AND document=?)').bind(row.server_id, managed.revision + 1, secret, now, row.server_id, secret),
   ]);

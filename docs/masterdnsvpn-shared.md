@@ -11,4 +11,6 @@ Accounting counts authenticated VLESS upload/download and applies the DNS inboun
 
 Public resolvers require an NS delegation and UDP port 53. Direct resolvers may use `VPS-IP:port`. Do not expose the private VLESS backend or share its UUID between customers. Use a fresh backend for each DNS listener.
 
-Upstream: https://github.com/masterking32/MasterDnsVPN
+The same authenticated localhost link is included in the customer’s app subscription. Open the customer page to download both files. For a shop product, select the DNS inbound under Services. A standalone shared-key product must use unlimited data and no individual expiry. A copied shared key can continue working even after access to the download page is revoked.
+
+[Operator walkthrough](operator-guide.md#masterdns) · [راهنمای فارسی](operator-guide.fa.md#masterdns) · [Upstream MasterDnsVPN](https://github.com/masterking32/MasterDnsVPN)

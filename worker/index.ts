@@ -4,12 +4,12 @@ import { accountRoute, activateOwner, claimInstallation, setupStatus } from './a
 import { ownerLogin, readOwner } from './owner-credentials';
 import { agentChannel, enrollmentRoute } from './outbound-agent';
 import { domainsRoute } from './cloudflare-domains';
-import { usageRefreshRoute, refreshUsageFleet } from './usage-refresh';
+import { usageRefreshRoute, refreshUsageFleet, recordTrafficReset } from './usage-refresh';
 import { workspace } from '../shared/workspaces';
 import { dashboard } from './dashboard';
 import { reconcileStandbys, standbyRoute } from './standby';
 import { ownerPath, entryPath, checkWorkspace } from './workspaces';
-import { adminAccess, canUseServer } from './admin-access';
+import { adminAccess, canManageStore, canUseServer } from './admin-access';
 import type { JsonObject, RemoteRequest, ServerInput } from '../shared/types';
 import { coreCatalog, isAgentOperation } from '../shared/cores';
 import { controlRoute, isUnsupportedPanelMutation, managedRequest, managedRow, profileRoute, reconcileFleet, reconcileServer, savedDocument, translatePanelRequest, translatePanelResponse } from './control';
@@ -132,7 +132,7 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
     if (configured(env)) { try { user = await principal(request, env); await checkWorkspace(request, env, user); } catch { user = null; } }
     const canonical = user ? await entryPath(env, user) : null;
     const migration: Record<string, string> = user && workspace(request.headers.get('X-Benx-Workspace')).kind === 'legacy' ? { 'Set-Cookie': sessionCookie(request, await issueSession(env, user.member, canonical!), 43200, canonical!) } : {};
-    const response = json({ configured: configured(env), ...await setupStatus(env), authenticated: Boolean(user), username: user?.username ?? null, role: user?.role ?? null, entryPath: canonical }, 200, migration);
+    const response = json({ configured: configured(env), ...await setupStatus(env), authenticated: Boolean(user), username: user?.username ?? null, role: user?.role ?? null, manageStore: canManageStore(user), entryPath: canonical }, 200, migration);
     if (migration['Set-Cookie']) response.headers.append('Set-Cookie', sessionCookie(request, '', 0, ''));
     return response;
   }
@@ -192,7 +192,9 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
       CASE WHEN m.server_id IS NULL THEN 0 ELSE 1 END AS managed,m.bound,m.phase AS sync_phase,m.revision AS desired_revision,m.applied_revision,
       h.online, h.latency, h.timestamp AS last_checked FROM servers s LEFT JOIN health h ON h.id =
       (SELECT id FROM health WHERE server_id = s.id ORDER BY timestamp DESC LIMIT 1) LEFT JOIN managed_state m ON m.server_id=s.id WHERE s.is_candidate=0 AND NOT EXISTS(SELECT 1 FROM servers parent WHERE parent.id=s.parent_id AND parent.is_candidate=1) AND NOT EXISTS(SELECT 1 FROM replacements r WHERE r.candidate_id=s.id) AND NOT EXISTS(SELECT 1 FROM replacements r WHERE r.candidate_id=s.parent_id) ORDER BY s.created_at`).all();
-    return json(result.results.filter(r => canUseServer(identity, String(r.id))));
+    return json(result.results.filter(r => canUseServer(identity, String(r.id))).map(row => ({
+      ...row, online: row.online ?? undefined, latency: row.latency ?? undefined, last_checked: row.last_checked ?? undefined,
+    })));
   }
   if (url.pathname === '/api/servers/test' && request.method === 'POST') {
     const input = await readJson<ServerInput & { id?: string }>(request);
@@ -295,6 +297,7 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
         catch { throw new HttpError(502, 'Remote panel returned an unexpected response.'); }
         if (document?.mode === 'panel') result = translatePanelResponse(document, server.id, input, result) as JsonObject;
         const success = upstream.ok && result.success !== false;
+        if (success && profile && document && input.method === 'POST') await recordTrafficReset(env, server, profile, document, input.path, ctx);
         if (success && input.path === '/benx/v1/setup' && input.method === 'GET') await syncInstalledPanel(env, server, Boolean((result.obj as JsonObject)?.panelReady));
         if (success && input.method === 'POST' && /^\/panel\/api\/clients\/del\/[^/]+$/.test(input.path)) await env.DB.prepare('DELETE FROM subscriptions WHERE server_id=? AND email=?').bind(server.id, decodeURIComponent(input.path.split('/').at(-1)!)).run();
         if (success && input.method === 'POST' && /^\/panel\/api\/clients\/update\/[^/]+$/.test(input.path) && typeof input.body?.email === 'string' && input.body.email !== decodeURIComponent(input.path.split('/').at(-1)!)) await env.DB.prepare('DELETE FROM subscriptions WHERE server_id=? AND email=?').bind(server.id, decodeURIComponent(input.path.split('/').at(-1)!)).run();

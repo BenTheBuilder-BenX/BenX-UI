@@ -57,6 +57,23 @@ afterEach(() => { sqlite.close(); vi.unstubAllGlobals(); remote.mockReset(); });
 
 describe('Telegram store configuration and isolation', () => {
   it('localizes default storefront text while preserving an owner’s custom messages', () => { const config = storeLanguage({ ...newStore(), welcome: 'My own welcome' }, 'fa'); expect(config.welcome).toBe('My own welcome'); expect(config.buyLabel).toBe('خرید سرویس'); expect(config.thankYou).toContain('سپاسگزاریم'); expect(storeLanguage(config, 'en').buyLabel).toBe('Browse plans'); });
+  it('uses saved menu, checkout and delivery labels in the buyer chat', async () => {
+    await setup();
+    const config = (await (await storeAdmin(req(''), env)).json() as {config: ReturnType<typeof newStore>}).config;
+    config.copy = {support: 'میز کمک', terms: 'شرایط ما', choose: 'پلن را انتخاب کن', pay: 'خرید با ستاره', page: 'راهنمای من', noPurchases: 'سابقه خرید خالی است'};
+    await storeAdmin(req('', 'PUT', {config}), env);
+    await update(1, {message: {chat: {id: 123, type: 'private'}, from: {id: 123}, text: '/start'}});
+    expect(JSON.stringify(requests.at(-1)?.body.reply_markup)).toContain('میز کمک');
+    expect(JSON.stringify(requests.at(-1)?.body.reply_markup)).toContain('شرایط ما');
+    await update(8, callback('configs')); expect(requests.at(-1)?.body.text).toBe('سابقه خرید خالی است');
+    await update(2, callback('plans')); expect(requests.at(-1)?.body.text).toBe('پلن را انتخاب کن');
+    await update(3, callback('product:pro')); expect(JSON.stringify(requests.at(-1)?.body.reply_markup)).toContain('خرید با ستاره');
+    await update(4, callback('buy:pro')); await update(5, pay(order().id));
+    expect(requests.at(-1)?.body.text).toContain('راهنمای من');
+    expect(() => validateStore({...config, copy: {pay: 'x'.repeat(61)}})).toThrow('labels');
+    expect(storeLanguage(newStore(), 'fa').terms).toContain('اشتراک');
+    expect(storeLanguage({...config, terms: 'My policy'}, 'fa').terms).toBe('My policy');
+  });
   it('keeps bot secrets encrypted and never returns them to the editor', async () => {
     const config = newStore(); await storeAdmin(req('', 'PUT', { config, token: botToken }), env);
     const raw = sqlite.prepare('SELECT secrets FROM telegram_store').get() as { secrets: string };

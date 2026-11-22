@@ -5,7 +5,7 @@ import type { ServerPolicy } from '../shared/policy';
 export type Page = 'account' | 'launch' | 'domains' | 'certificates' | 'storefront' | 'dns' | 'overview' | 'team' | 'testing' | 'telegram' | 'inbounds' | 'clients' | 'groups' | 'services' | 'tunneling' | 'locations' | 'cores' | 'servers' | 'nodes' | 'hosts' | 'outbounds' | 'routing' | 'subscriptions' | 'settings' | 'xray' | 'logs' | 'backups' | 'api' | 'audit';
 export interface PanelState {
   administrator?: boolean; demo: boolean; authenticated: boolean; servers: Server[]; server: Server;
-  status: Status | null; inbounds: Inbound[]; online: string[];
+  status: Status | null; inbounds: Inbound[]; online: string[] | null;
   capabilities: ServerCapabilities | null;
   policy: ServerPolicy; policyReady: boolean; policyError: string;
   savePolicy: (next: ServerPolicy) => Promise<void>;

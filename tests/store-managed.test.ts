@@ -4,6 +4,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 vi.mock('../worker/remote', () => ({ callRemoteJson: vi.fn() }));
 import { callRemoteJson } from '../worker/remote';
 import { createManaged, managedRow, saveManaged, savedDocument } from '../worker/control';
+import { publicSubscription } from '../worker/subscriptions';
 import { fulfillOrder, retryStoreQueue, storeAdmin } from '../worker/store';
 import { emptyDocument, type ManagedDocument } from '../shared/managed';
 import { newStore } from '../shared/store';
@@ -11,7 +12,7 @@ import { parseObject, type Client, type JsonObject } from '../shared/types';
 import { decrypt, encrypt } from '../worker/security';
 
 const key = btoa('k'.repeat(32)), orderId = '11111111-1111-4111-8111-111111111111', email = `store-${orderId}`;
-let db: DatabaseSync, env: Env, live: ManagedDocument, liveRevision: number, unavailable: boolean, loseApplyResponse: boolean, blockDelivery: boolean;
+let db: DatabaseSync, env: Env, live: ManagedDocument, liveRevision: number, unavailable: boolean, loseApplyResponse: boolean, blockDelivery: boolean, incompleteDNS: boolean;
 let applications: Array<{ revision: number; document: ManagedDocument }>, telegram: Array<{ method: string; body: JsonObject }>;
 const remote = vi.mocked(callRemoteJson);
 function database(db: DatabaseSync): D1Database {
@@ -31,7 +32,7 @@ beforeEach(async () => {
   d.state.inbounds = [{ id: 1, protocol: 'vless', port: 443, enable: true, expiryTime: 0, listen: '', settings: { publicHost: 'vpn.example.com', decryption: 'none' }, streamSettings: { network: 'tcp', security: 'tls', tlsSettings: { serverName: 'vpn.example.com', certificates: [{ certificateFile: '/cert.pem', keyFile: '/key.pem' }] } }, sniffing: {} }];
   d.policy.services = [{ id: 'pro', name: 'Pro', description: '', enabled: true, inbounds: [{ inboundId: 1, multiplier: 1 }], rules: { quotaGB: 100, expiryDays: 30, ipLimit: 0, hwidLimit: 0 }, formats: ['v2ray', 'singbox', 'clash'] }];
   await createManaged(env, 's', d);
-  live = structuredClone(d); liveRevision = 1; unavailable = false; loseApplyResponse = false; blockDelivery = false; applications = []; telegram = [];
+  live = structuredClone(d); liveRevision = 1; unavailable = false; loseApplyResponse = false; blockDelivery = false; incompleteDNS = false; applications = []; telegram = [];
   const config = newStore(); config.enabled = true; config.support = '@support'; config.terms = 'Test purchase terms.';
   const product = { id: 'pro', name: 'Pro', description: '100 GB', price: 100, enabled: true, serverId: 's', serviceId: 'pro' }; config.products = [product];
   db.prepare("INSERT INTO telegram_store(id,revision,config,secrets,username,webhook,connected) VALUES(1,0,?,?,'test_bot','https://benx.example.com/telegram/webhook',1)").run(JSON.stringify(config), await encrypt({ token: '123456789:' + 'a'.repeat(32), hook: 'h'.repeat(32) }, key));
@@ -46,6 +47,14 @@ beforeEach(async () => {
       if (loseApplyResponse) { loseApplyResponse = false; throw new Error('Response lost after agent accepted configuration'); }
       return { state: 'queued' };
     }
+    if (request.path.includes('/clients/links/')) {
+      const id = live.state.clients[email]?.id;
+      if (!parseObject(live.state.inbounds[0].settings).meteredInboundId && live.state.inbounds[0].protocol === 'masterdnsvpn') {
+        return ['masterdns://' + btoa(JSON.stringify({ domain: 'dns.example.com', key: 'shared-key', protocol: 'SOCKS5' })), JSON.stringify({ DOMAINS: ['dns.example.com'], PROTOCOL_TYPE: 'SOCKS5', ENCRYPTION_KEY: 'shared-key' })];
+      }
+      if (incompleteDNS) return ['vless://wrong-id@127.0.0.1:18000#MasterDNSVPN-metered'];
+      return [`vless://${id}@127.0.0.1:18000?encryption=none&security=none&type=tcp#MasterDNSVPN-metered`, 'vless://wrong-id@127.0.0.1:18000#MasterDNSVPN-metered', JSON.stringify({ DOMAINS: ['dns.example.com'], PROTOCOL_TYPE: 'TCP', ENCRYPTION_KEY: 'fixture-key', LISTEN_PORT: 18000 })];
+    }
     if (request.path.includes('/clients/get/')) return { ...structuredClone(live.state.clients[decodeURIComponent(request.path.split('/').at(-1)!)]), up: 0, down: 0 };
     if (request.path.endsWith('/inbounds/list')) return live.state.inbounds.map(i => ({ ...i, settings: { ...parseObject(i.settings), clients: Object.values(live.state.clients).filter(c => (c.inboundIds as number[]).includes(Number(i.id))) } }));
     throw new Error(`Unexpected bypass operation: ${request.path}`);
@@ -54,6 +63,51 @@ beforeEach(async () => {
 afterEach(() => { db.close(); vi.unstubAllGlobals(); remote.mockReset(); });
 
 describe('Managed Telegram provisioning and recovery', () => {
+  async function dnsOffer(metered: boolean) {
+    const doc = await document();
+    const backend = { ...doc.state.inbounds[0], id: 2, port: 14443, listen: '127.0.0.1', excludeFromSub: true, settings: { decryption: 'none' }, streamSettings: { network: 'tcp', security: 'none' } };
+    doc.state.nextId = 3;
+    doc.state.inbounds = [{ id: 1, port: 53, enable: true, protocol: 'masterdnsvpn', remark: 'DNS plan', settings: { DOMAIN: ['dns.example.com'], ...(metered ? { meteredInboundId: 2 } : {}) } }, backend];
+    doc.policy.subscriptionOrigin = 'https://subs.example.com';
+    await saveManaged(env, (await managedRow(env, 's'))!, doc);
+  }
+  it('delivers the metered DNS customer page and compatible feeds with a private, per-buyer VLESS link', async () => {
+    await dnsOffer(true); await settleOrder();
+    expect(order()).toMatchObject({ status: 'delivered', error: '' });
+    expect(live.state.clients[email].inboundIds).toEqual([1, 2]);
+    const text = String(telegram.at(-1)?.body.text), pageUrl = text.match(/https:\/\/subs\.example\.com\/sub\/[a-f0-9]{64}\/page/)?.[0];
+    expect(pageUrl).toBeTruthy();
+    const url = pageUrl!.slice(0, -5);
+    expect(atob(await (await publicSubscription(new Request(url), env)).text())).toContain('127.0.0.1:18000');
+    const feed = await publicSubscription(new Request(url + '/v2ray'), env);
+    expect(atob(await feed.text())).toContain('vless://' + live.state.clients[email].id + '@127.0.0.1:18000');
+    expect(atob(await (await publicSubscription(new Request(url + '/v2ray'), env)).text())).not.toContain('wrong-id');
+    const page = await (await publicSubscription(new Request(pageUrl!), env)).text();
+    expect(page).toContain('client_resolvers.txt'); expect(page).toContain('18000'); expect(page).toContain('TCP');
+    expect(await (await publicSubscription(new Request(url + '/download?inbound=1'), env)).text()).toContain('fixture-key');
+    incompleteDNS = true;
+    await expect(publicSubscription(new Request(url + '/v2ray'), env)).rejects.toMatchObject({ status: 409 });
+    live.state.clients[email].enable = false;
+    await expect(publicSubscription(new Request(url + '/download?inbound=1'), env)).rejects.toMatchObject({ status: 403 });
+  });
+  it('delivers a standalone DNS plan only as unlimited and warns the customer in both languages', async () => {
+    await dnsOffer(false);
+    const next = await document(), plan = next.policy.services[0];
+    plan.rules.quotaGB = 0; plan.rules.expiryDays = 0; plan.formats = ['v2box', 'v2ray'];
+    await saveManaged(env, (await managedRow(env, 's'))!, next);
+    const snapshot = JSON.parse((db.prepare('SELECT snapshot FROM telegram_orders WHERE id=?').get(orderId) as {snapshot: string}).snapshot);
+    db.prepare('UPDATE telegram_orders SET snapshot=? WHERE id=?').run(JSON.stringify({...snapshot, service: plan}), orderId);
+    await settleOrder(); expect(order().status).toBe('delivered');
+    const delivery = String(telegram.at(-1)?.body.text), url = delivery.match(/https:\/\/subs\.example\.com\/sub\/[a-f0-9]{64}/)![0];
+    expect(delivery).toContain('/v2box'); expect(delivery).not.toContain('/v2ray');
+    expect(atob(await (await publicSubscription(new Request(url), env)).text())).toContain('masterdns://');
+    expect(await (await publicSubscription(new Request(url + '/page?lang=en'), env)).text()).toContain('unmetered and can be unlimited');
+    expect(await (await publicSubscription(new Request(url + '/page?lang=fa'), env)).text()).toContain('می‌تواند نامحدود باشد');
+  });
+  it('rejects a capped standalone shared-key DNS plan before creating a paid client', async () => {
+    await dnsOffer(false); await fulfillOrder(env, orderId);
+    expect(order().error).toMatch(/unmetered/i); expect(order().provision).toBe(''); expect(live.state.clients[email]).toBeUndefined();
+  });
   it('retains encrypted client intent while the VPS is offline and delivers the same identity after confirmation', async () => {
     unavailable = true; await fulfillOrder(env, orderId);
     expect(order().status).toBe('delivery_failed'); expect(order().delivery).toBe('');

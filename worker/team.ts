@@ -1,10 +1,13 @@
 import { defaultPermissions, validateMember, type TeamMember, type MemberLimits, type MemberPermissions, type MemberGrant, type PortalCustomer } from '../shared/team';
 import { reduceDocument, validateDocument, type ManagedDocument } from '../shared/managed';
+import { primaryAttachmentIds } from '../shared/masterdns';
 import { parseObject } from '../shared/types';
 import { managedRow, savedDocument, reconcileServer, type ManagedRow } from './control';
 import { encrypt, equalSecret, HttpError, readJson, sessionClaims } from './security';
 import { callRemoteJson, type StoredServer } from './remote';
 import { issueStoreSubscription } from './subscriptions';
+import { reportedClientTraffic } from '../shared/client-usage';
+import { recordTrafficReset } from './usage-refresh';
 import { readOwner } from './owner-credentials';
 const GB = 1024 ** 3;
 export interface MemberRow { id: string; username: string; role: 'manager' | 'reseller'; enabled: number; version: number; password_hash: string; salt: string; limits: string; permissions: string; grants: string; consumed_bytes: number; archived: number; is_admin?: number; server_scope?: string }
@@ -48,8 +51,9 @@ type CustomerSnapshot = Promise<{ state: ManagedRow | null; d: ManagedDocument |
 async function customerView(env: Env, row: CustomerRow, cache: Map<string, CustomerSnapshot>): Promise<PortalCustomer> {
   if (!cache.has(row.server_id)) cache.set(row.server_id, (async () => { const state = await managedRow(env, row.server_id); return { state, d: state ? await savedDocument(env, state) : null }; })());
   const { state, d } = await cache.get(row.server_id)!, c = d?.state.clients[row.email];
+  const attached = c?.inboundIds as number[] || [], visible = d?.mode === 'native' ? primaryAttachmentIds(attached, d.state.inbounds) : attached;
   const usage = parseObject(d?.runtime.usage), t = parseObject(usage[row.email] || d?.runtime[row.email]);
-  return { id: row.id, owner: row.owner_id, serverId: row.server_id, email: row.email, name: row.name, quotaGB: row.quota_bytes / GB, days: row.days, ip: row.ip, hwid: row.hwid, enabled: !!row.enabled, paused: !!row.paused, usedGB: ((row.quota_up ?? 0) + (row.quota_down ?? 0)) / GB, online: typeof t.online === "boolean" ? t.online : null, expiryTime: Number(c?.expiryTime || 0), inboundIds: c?.inboundIds as number[] || [], revision: state?.revision };
+  return { id: row.id, owner: row.owner_id, serverId: row.server_id, email: row.email, name: row.name, quotaGB: row.quota_bytes / GB, days: row.days, ip: row.ip, hwid: row.hwid, enabled: !!row.enabled, paused: !!row.paused, usedGB: ((row.quota_up ?? 0) + (row.quota_down ?? 0)) / GB, online: typeof t.online === "boolean" ? t.online : null, expiryTime: Number(c?.expiryTime || 0), inboundIds: visible, revision: state?.revision };
 }
 async function customerViews(env: Env, rows: CustomerRow[]) { const cache = new Map<string, CustomerSnapshot>(); return Promise.all(rows.map(c => customerView(env, c, cache))); }
 function limitsOf(m: MemberRow): MemberLimits { return JSON.parse(m.limits); }
@@ -74,8 +78,8 @@ async function commitCustomer(env: Env, m: MemberRow, row: ManagedRow, d: Manage
   const fence = 'EXISTS(SELECT 1 FROM managed_state WHERE server_id=? AND document=? AND revision=?)';
   const guardValues = [row.server_id, secret, row.revision + 1];
   const result = await env.DB.batch([
-    env.DB.prepare(`UPDATE managed_state SET document=?,revision=revision+1,phase='pending',error='',updated_at=? WHERE server_id=? AND revision=? AND lease_until<? AND bound=1 AND EXISTS(SELECT 1 FROM team_members WHERE id=? AND version=? AND (enabled=1 OR ?=1)) AND (?=0 OR (SELECT COALESCE(SUM(quota_bytes),0) FROM team_customers WHERE owner_id=? AND id!=?)+?<=?) AND (?=0 OR (SELECT COUNT(*) FROM team_customers WHERE owner_id=? AND id!=?)+?<=?) AND (?=0 OR (SELECT consumed_bytes FROM team_members WHERE id=?)<?) AND (?='' OR EXISTS(SELECT 1 FROM team_customers WHERE id=? AND owner_id=? AND version=? AND operation_until<${now}))`)
-      .bind(secret, now, row.server_id, row.revision, now, m.id, m.version, Number(remove), remove ? 0 : l.allocationGB, m.id, customer.id, bytes, l.allocationGB * GB, remove ? 0 : l.customers, m.id, customer.id, remove ? 0 : 1, l.customers, remove || !customer.enabled ? 0 : l.consumptionGB, m.id, l.consumptionGB * GB, old?.id ?? '', old?.id ?? '', m.id, old?.version ?? 0),
+    env.DB.prepare(`UPDATE managed_state SET document=?,revision=revision+1,phase='pending',error='',updated_at=? WHERE server_id=? AND revision=? AND document=? AND lease_until<? AND bound=1 AND EXISTS(SELECT 1 FROM team_members WHERE id=? AND version=? AND (enabled=1 OR ?=1)) AND (?=0 OR (SELECT COALESCE(SUM(quota_bytes),0) FROM team_customers WHERE owner_id=? AND id!=?)+?<=?) AND (?=0 OR (SELECT COUNT(*) FROM team_customers WHERE owner_id=? AND id!=?)+?<=?) AND (?=0 OR (SELECT consumed_bytes FROM team_members WHERE id=?)<?) AND (?='' OR EXISTS(SELECT 1 FROM team_customers WHERE id=? AND owner_id=? AND version=? AND operation_until<${now}))`)
+      .bind(secret, now, row.server_id, row.revision, row.document, now, m.id, m.version, Number(remove), remove ? 0 : l.allocationGB, m.id, customer.id, bytes, l.allocationGB * GB, remove ? 0 : l.customers, m.id, customer.id, remove ? 0 : 1, l.customers, remove || !customer.enabled ? 0 : l.consumptionGB, m.id, l.consumptionGB * GB, old?.id ?? '', old?.id ?? '', m.id, old?.version ?? 0),
     remove ? env.DB.prepare(`DELETE FROM team_customers WHERE id=? AND owner_id=? AND ${fence}`).bind(customer.id, m.id, ...guardValues) : env.DB.prepare(`INSERT INTO team_customers(id,owner_id,server_id,email,name,quota_bytes,days,ip,hwid,enabled,paused,identity,created_at) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,? WHERE ${fence} ON CONFLICT(id) DO UPDATE SET name=excluded.name,quota_bytes=excluded.quota_bytes,days=excluded.days,ip=excluded.ip,hwid=excluded.hwid,enabled=excluded.enabled,paused=excluded.paused,version=team_customers.version+1`)
       .bind(customer.id, m.id, row.server_id, customer.email, customer.name, customer.quota_bytes, customer.days, customer.ip, customer.hwid, customer.enabled, customer.paused, customer.identity, now, ...guardValues),
     env.DB.prepare(`INSERT INTO managed_versions(server_id,revision,document,created_at) SELECT ?,?,?,? WHERE ${fence}`).bind(row.server_id, row.revision + 1, secret, now, ...guardValues),
@@ -159,8 +163,10 @@ export async function teamRoute(request: Request, env: Env, ctx: ExecutionContex
       if (!lock) throw new HttpError(409, 'Traffic is being updated. Refresh before resetting.');
       try {
         await captureUsage(env, c, server, operation);
-        await callRemoteJson(server, env, { path: '/panel/api/clients/resetTraffic/' + encoded, method: 'POST' });
+        const path = '/panel/api/clients/resetTraffic/' + encoded;
+        await callRemoteJson(server, env, { path, method: 'POST' });
         await env.DB.prepare('UPDATE team_customers SET last_up=0,last_down=0,quota_up=0,quota_down=0,version=version+1 WHERE id=? AND operation_id=?').bind(c.id, operation).run();
+        await recordTrafficReset(env, server, row, d, path, ctx);
       } finally { await env.DB.prepare("UPDATE team_customers SET operation_id='',operation_until=0 WHERE id=? AND operation_id=?").bind(c.id, operation).run(); }
     }
     await env.DB.prepare('INSERT INTO audit(timestamp,actor,server_id,action,success) VALUES(?,?,?,?,1)').bind(Date.now(), m.username, server.id, 'Customer ' + match[2]).run();
@@ -194,12 +200,14 @@ export async function captureUsage(env: Env, customer: CustomerRow, server: Stor
   const current = await env.DB.prepare('SELECT * FROM team_customers WHERE id=?').bind(customer.id).first<CustomerRow>();
   if (!current) return;
   if ((current.operation_until ?? 0) >= Date.now() && current.operation_id !== operation) throw new HttpError(409, 'A customer traffic operation is in progress.');
-  const detail = parseObject(await callRemoteJson(server, env, { path: '/panel/api/clients/get/' + encodeURIComponent(current.email), method: 'GET' })), live = parseObject(detail.client || detail), t = parseObject(detail.traffic || detail.stats || detail.clientStats);
+  const detail = parseObject(await callRemoteJson(server, env, { path: '/panel/api/clients/get/' + encodeURIComponent(current.email), method: 'GET' })), live = parseObject(detail.client || detail);
   if (live.subId !== current.identity) throw new HttpError(409, 'Customer identity changed.');
-  const up = Number(t.rawUp ?? t.up ?? live.up ?? 0), down = Number(t.rawDown ?? t.down ?? live.down ?? 0);
+  const reported = reportedClientTraffic(detail), t = reported ?? {};
+  const unused = !reported && (live.traffic === null || detail.traffic === null) && current.last_up === 0 && current.last_down === 0;
+  const up = Number(t.rawUp ?? t.up ?? live.up ?? (unused ? 0 : NaN)), down = Number(t.rawDown ?? t.down ?? live.down ?? (unused ? 0 : NaN));
   if (!Number.isSafeInteger(up) || !Number.isSafeInteger(down) || up < 0 || down < 0) throw new HttpError(502, 'Invalid traffic counters.');
   const quotaUp = Number(t.up ?? up), quotaDown = Number(t.down ?? down);
-  if (!Number.isSafeInteger(quotaUp) || !Number.isSafeInteger(quotaDown) || quotaUp < 0 || quotaDown < 0) throw new HttpError(502, 'Invalid quota counters.');
+  if (![quotaUp, quotaDown].every(value => Number.isFinite(value) && value >= 0 && value <= Number.MAX_SAFE_INTEGER)) throw new HttpError(502, 'Invalid quota counters.');
   const delta = (up >= current.last_up ? up - current.last_up : up) + (down >= current.last_down ? down - current.last_down : down), fence = crypto.randomUUID();
   const result = await env.DB.batch([
     env.DB.prepare('UPDATE team_customers SET last_up=?,last_down=?,quota_up=?,quota_down=?,consumed_bytes=consumed_bytes+?,version=version+1,poll_id=?,checked_at=? WHERE id=? AND version=? AND identity=? AND (operation_until<? OR operation_id=?)').bind(up, down, quotaUp, quotaDown, delta, fence, Date.now(), current.id, current.version, current.identity, Date.now(), operation),
@@ -236,7 +244,8 @@ export async function reconcileTeam(env: Env) {
             if (!updated) continue;
             Object.assign(c, fields, { version: updated.version });
           }
-          const grant = grants.find(g => g.serverId === serverId), paused = exhausted(m) || !grant || (client.inboundIds as number[]).some(id => !grant.inboundIds.includes(id));
+          const assigned = client.inboundIds as number[], visible = d.mode === 'native' ? primaryAttachmentIds(assigned, d.state.inbounds) : assigned;
+          const grant = grants.find(g => g.serverId === serverId), paused = exhausted(m) || !grant || visible.some(id => !grant.inboundIds.includes(id));
           // Only restore access that was paused by this account overlay. An owner's manual disable is retained.
           if (!!c.paused === paused && (!paused || client.enable === false)) continue;
           client.enable = !!c.enabled && !paused; updates.push({ customer: c, paused });
@@ -247,7 +256,7 @@ export async function reconcileTeam(env: Env) {
         const customerGuards = "NOT EXISTS(SELECT 1 FROM json_each(?) j LEFT JOIN team_customers c ON c.id=json_extract(j.value,'$.id') WHERE c.id IS NULL OR c.version!=json_extract(j.value,'$.version'))";
         const fence = 'EXISTS(SELECT 1 FROM managed_state WHERE server_id=? AND document=?)';
         const result = await env.DB.batch([
-          env.DB.prepare("UPDATE managed_state SET document=?,revision=revision+1,phase='pending',updated_at=? WHERE server_id=? AND revision=? AND lease_until<? AND EXISTS(SELECT 1 FROM team_members WHERE id=? AND version=? AND consumed_bytes=?) AND " + customerGuards).bind(secret, now, serverId, row.revision, now, m.id, m.version, m.consumed_bytes, snapshot),
+          env.DB.prepare("UPDATE managed_state SET document=?,revision=revision+1,phase='pending',updated_at=? WHERE server_id=? AND revision=? AND document=? AND lease_until<? AND EXISTS(SELECT 1 FROM team_members WHERE id=? AND version=? AND consumed_bytes=?) AND " + customerGuards).bind(secret, now, serverId, row.revision, row.document, now, m.id, m.version, m.consumed_bytes, snapshot),
           env.DB.prepare("UPDATE team_customers SET paused=json_extract(j.value,'$.paused'),version=team_customers.version+1 FROM json_each(?) j WHERE team_customers.id=json_extract(j.value,'$.id') AND " + fence).bind(snapshot, serverId, secret),
           env.DB.prepare('INSERT INTO managed_versions(server_id,revision,document,created_at) SELECT ?,?,?,? WHERE ' + fence).bind(serverId, row.revision + 1, secret, now, serverId, secret),
         ]);
@@ -262,5 +271,7 @@ export async function accountSubscriptionAllowed(env: Env, serverId: string, ema
   if (exhausted(row) || row.customer_paused || !row.customer_enabled) return false;
   const managed = await managedRow(env, serverId); if (!managed) return false;
   const d = await savedDocument(env, managed), c = d.state.clients[email], grant = (JSON.parse(row.grants) as MemberGrant[]).find(g => g.serverId === serverId);
-  return !!grant && c?.subId === row.customer_identity && (c.inboundIds as number[]).every(id => grant.inboundIds.includes(id));
+  if (!grant || !c || c.subId !== row.customer_identity) return false;
+  const assigned = c.inboundIds as number[], visible = d.mode === 'native' ? primaryAttachmentIds(assigned, d.state.inbounds) : assigned;
+  return visible.every(id => grant.inboundIds.includes(id));
 }

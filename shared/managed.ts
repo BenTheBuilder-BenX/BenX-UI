@@ -209,7 +209,15 @@ export function configurationView(d: ManagedDocument, input: RemoteRequest): unk
   }
   if (input.path === '/panel/api/clients/list' && input.method === 'GET') return Object.values(d.state.clients).map(clientView);
   if (/^\/panel\/api\/inbounds\/get\/\d+$/.test(input.path) && input.method === 'GET') return (configurationView(d, { path: '/panel/api/inbounds/list', method: 'GET' }) as JsonObject[]).find(i => i.id === Number(input.path.split('/').at(-1))) ?? null;
-  if (/^\/panel\/api\/clients\/get\/[^/]+$/.test(input.path) && input.method === 'GET') { const c = d.state.clients[decodeURIComponent(input.path.split('/').at(-1)!)]; return c ? clientView(c) : null; }
+  if (/^\/panel\/api\/clients\/get\/[^/]+$/.test(input.path) && input.method === 'GET') {
+    const email = decodeURIComponent(input.path.split('/').at(-1)!), c = d.state.clients[email];
+    if (!c) return null;
+    const detail = clientView(c);
+    if (d.mode === 'native' && Number(c.expiryTime) < 0 && Number(detail.expiryTime) > 0) {
+      detail._firstUse = structuredClone(parseObject(d.runtime.firstUse)[email]);
+    }
+    return detail;
+  }
   if (/^\/panel(?:\/api)?\/xray\/$/.test(input.path) && input.method === 'POST') return { xraySetting: JSON.stringify(d.state.xray) };
   if (/^\/panel(?:\/api)?\/setting\/all$/.test(input.path) && input.method === 'POST') return structuredClone(d.settings);
   if (/^\/panel\/api\/(nodes|hosts)\/list$/.test(input.path) && input.method === 'GET') return structuredClone(input.path.includes('/nodes/') ? d.nodes : d.hosts);

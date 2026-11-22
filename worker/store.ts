@@ -1,4 +1,5 @@
-import { hydrateStore, matchesPayment, newStore, storeAmount, validateStore, type StoreConfig, type StoreProduct } from '../shared/store';
+import { masterDNSBackend } from '../shared/masterdns';
+import { botText, productPrices, hydrateStore, matchesPayment, newStore, storeAmount, validateStore, type StoreConfig, type StoreProduct } from '../shared/store';
 import { formatNames, newPolicy, serviceClientFields, type ServerPolicy, type ServicePlan } from '../shared/policy';
 import { parseObject, type Client, type Inbound, type JsonObject, type ServerCapabilities } from '../shared/types';
 import type { StoredServer } from './remote';
@@ -34,12 +35,20 @@ async function target(env: Env, product: StoreProduct, checkRemote = true) {
   if (checkRemote) {
     const inbounds = await callRemoteJson(server, env, { path: '/panel/api/inbounds/list', method: 'GET' }) as Inbound[];
     const included = service.inbounds.map(i => inbounds.find(n => n.id === i.inboundId));
-    if (included.some(i => !i?.enable || i.expiryTime > 0 && i.expiryTime < Date.now() || !['vless', 'vmess', 'trojan', 'shadowsocks'].includes(i.protocol))) throw new HttpError(409, 'Store delivery needs enabled VLESS, VMess, Trojan or Shadowsocks inbounds.');
+    for (const inbound of included) {
+      if (!inbound?.enable || inbound.excludeFromSub || inbound.expiryTime > 0 && inbound.expiryTime <= Date.now()) throw new HttpError(409, 'Choose active service inbounds visible in subscriptions.');
+      if (inbound.protocol === 'masterdnsvpn' && server.kind === 'server') {
+        let backend;
+        try { backend = masterDNSBackend(inbound, inbounds); } catch (error) { throw new HttpError(409, (error as Error).message); }
+        if (!backend && (service.rules.quotaGB || service.rules.expiryDays)) throw new HttpError(409, 'Standalone MasterDNS is unmetered and uses a shared key. Pair a private VLESS backend to sell a capped or expiring plan.');
+        if (!backend && included.length === 1 && (!service.formats.includes('v2box') || policy.subscriptions.v2box?.enabled === false)) throw new HttpError(409, 'Enable V2Box for a standalone MasterDNS product.');
+      } else if (!['vless', 'vmess', 'trojan', 'shadowsocks'].includes(inbound.protocol)) throw new HttpError(409, 'This inbound does not support automatic store delivery.');
+    }
     const ssLengths = new Set(included.filter(i => i?.protocol === 'shadowsocks').map(i => String(parseObject(i!.settings).method || '')).filter(m => m.startsWith('2022-')).map(m => m === '2022-blake3-aes-128-gcm' ? 16 : 32));
     if (ssLengths.size > 1) throw new HttpError(409, 'This service mixes incompatible Shadowsocks 2022 client key sizes. Use separate services.');
     if (ssLengths.size) passwordLength = [...ssLengths][0];
     if (server.kind === 'server') {
-      if (included.some(i => !parseObject(i!.settings).publicHost)) throw new HttpError(409, 'Set a public proxy host on every service inbound.');
+      if (included.some(i => i!.protocol !== 'masterdnsvpn' && !parseObject(i!.settings).publicHost)) throw new HttpError(409, 'Set a public proxy host on every service inbound.');
       const capabilities = await callRemoteJson(server, env, { path: '/benx/v1/capabilities', method: 'GET' }) as ServerCapabilities;
       if (!capabilities.features.includes('weighted-accounting') || service.rules.ipLimit || service.rules.hwidLimit) throw new HttpError(409, 'Update the accounting agent and remove unsupported IP/HWID limits before selling this service.');
     }
@@ -143,20 +152,19 @@ export async function storeAdmin(request: Request, env: Env) {
   throw new HttpError(405, 'Store action not supported.');
 }
 function chunks<T>(rows: T[], columns: number) { return Array.from({ length: Math.ceil(rows.length / columns) }, (_, i) => rows.slice(i * columns, (i + 1) * columns)); }
-function keyboard(config: StoreConfig) { return { inline_keyboard: [[{ text: config.buyLabel, callback_data: 'plans' }, { text: config.configsLabel, callback_data: 'configs' }], ...chunks(config.buttons.map(b => ({ text: b.label, url: b.url })), config.buttonColumns), [{ text: config.language === 'fa' ? 'پشتیبانی' : 'Support', callback_data: 'support' }, { text: config.language === 'fa' ? 'قوانین' : 'Terms', callback_data: 'terms' }]] }; }
+function keyboard(config: StoreConfig) { return { inline_keyboard: [...chunks([{ text: config.buyLabel, callback_data: 'plans' }, { text: config.configsLabel, callback_data: 'configs' }], config.buttonColumns), ...chunks(config.buttons.map(b => ({ text: b.label, url: b.url })), config.buttonColumns), ...chunks([{ text: botText(config, 'support'), callback_data: 'support' }, { text: botText(config, 'terms'), callback_data: 'terms' }], config.buttonColumns)] }; }
 interface Receipt { fileId: string; document: boolean }
 async function acceptReceipt(env: Env, userId: number, message: NonNullable<Update['message']>, config: StoreConfig, token: string) {
   const session = await env.DB.prepare('SELECT order_id FROM telegram_receipt_sessions WHERE user_id=? AND expires_at>?').bind(userId, Date.now()).first<{ order_id: string }>();
   const file = message.photo?.at(-1) ?? message.document;
-  const fa = config.language === 'fa';
   if (!session || !file || !file.file_id || file.file_id.length > 1024 || (file.file_size ?? 0) > 10 * 1024 * 1024 || message.document && !['image/jpeg', 'image/png'].includes(message.document.mime_type ?? '')) {
-    await telegramCall(token, 'sendMessage', { chat_id: userId, text: fa ? 'ابتدا دکمه «ارسال رسید» سفارش را بزنید، سپس عکس JPG یا PNG تا ۱۰ مگابایت ارسال کنید.' : 'Tap Send receipt on your order first, then send a JPG or PNG image up to 10 MB.' }); return;
+    await telegramCall(token, 'sendMessage', { chat_id: userId, text: botText(config, 'receiptFormat') }); return;
   }
   const receipt = await encrypt({ fileId: file.file_id, document: Boolean(message.document) } satisfies Receipt, env.ENCRYPTION_KEY);
   const order = await env.DB.prepare("UPDATE telegram_orders SET receipt=?,status='awaiting_approval',receipt_notified=0,receipt_version=receipt_version+1,error='' WHERE id=? AND user_id=? AND payment_method='transfer' AND status='awaiting_receipt' AND COALESCE(reviewed_at,created_at)>? RETURNING *").bind(receipt, session.order_id, userId, Date.now() - 86400000).first<Order>();
   if (!order) return;
   await env.DB.prepare('DELETE FROM telegram_receipt_sessions WHERE user_id=? AND order_id=?').bind(userId, order.id).run();
-  try { await telegramCall(token, 'sendMessage', { chat_id: userId, text: fa ? 'رسید دریافت شد ✅ پس از بررسی تراکنش بانکی توسط مدیر، نتیجه و کانفیگ برایتان ارسال می‌شود.' : 'Receipt received. Your admin will verify the bank transaction before delivering your config.' }); } catch { /* The saved order remains visible through /myconfigs. */ }
+  try { await telegramCall(token, 'sendMessage', { chat_id: userId, text: botText(config, 'received') }); } catch { /* The saved order remains visible through /myconfigs. */ }
   try { await notifyReceipt(env, order); } catch { await env.DB.prepare("UPDATE telegram_orders SET error='Admin notification pending. Make sure the admin has started this bot.' WHERE id=? AND status='awaiting_approval'").bind(order.id).run(); }
 }
 async function notifyReceipt(env: Env, order: Order) {
@@ -177,7 +185,7 @@ async function reviewTransfer(env: Env, id: string, approve: boolean, reviewer: 
   const order = await env.DB.prepare("UPDATE telegram_orders SET status=?,paid_at=?,reviewed_by=?,reviewed_at=?,error=? WHERE id=? AND payment_method='transfer' AND status='awaiting_approval' AND receipt!='' AND receipt_version=? RETURNING *").bind(approve ? 'paid' : 'awaiting_receipt', approve ? Date.now() : null, reviewer, Date.now(), approve ? '' : 'Receipt rejected. Waiting for a new receipt.', id, version).first<Order>();
   if (!order) return false; // A replayed or concurrent approval cannot provision twice.
   if (approve) await fulfillOrder(env, order.id);
-  else await telegramCall(secrets.token, 'sendMessage', { chat_id: order.user_id, text: config.language === 'fa' ? 'رسید شما تأیید نشد. با پشتیبانی تماس بگیرید یا رسید درست را دوباره ارسال کنید.' : 'Your receipt was not approved. Contact support or submit a corrected receipt.', reply_markup: { inline_keyboard: [[{ text: config.language === 'fa' ? 'ارسال مجدد رسید' : 'Resubmit receipt', callback_data: `receipt:${order.id}` }]] } });
+  else await telegramCall(secrets.token, 'sendMessage', { chat_id: order.user_id, text: botText(config, 'rejected'), reply_markup: { inline_keyboard: [[{ text: botText(config, 'resubmit'), callback_data: `receipt:${order.id}` }]] } });
   return true;
 }
 async function processUpdate(env: Env, update: Update) {
@@ -192,7 +200,7 @@ async function processUpdate(env: Env, update: Update) {
     const activeServer = snapshot && await env.DB.prepare('SELECT enabled FROM servers WHERE id=?').bind(snapshot.serverId).first<{ enabled: number }>();
     const hasFormat = snapshot && snapshot.service.formats.some(f => livePolicy?.subscriptions[f]?.enabled !== false);
     const ok = Boolean(config.enabled && current && sameService && hasFormat && activeServer?.enabled && order && order.status === 'pending' && Date.now() - order.created_at < 3600000 && matchesPayment(order, query, query.from.id));
-    await telegramCall(secrets.token, 'answerPreCheckoutQuery', { pre_checkout_query_id: query.id, ok, ...(!ok ? { error_message: 'This order is no longer available. Please choose your plan again.' } : {}) }); return;
+    await telegramCall(secrets.token, 'answerPreCheckoutQuery', { pre_checkout_query_id: query.id, ok, ...(!ok ? { error_message: botText(config, 'expiredInvoice') } : {}) }); return;
   }
   const message = update.message, callback = update.callback_query;
   const chat = message?.chat ?? callback?.message?.chat, userId = message?.from?.id ?? callback?.from.id;
@@ -208,7 +216,7 @@ async function processUpdate(env: Env, update: Update) {
   }
   const data = callback?.data ?? message?.text?.split(' ')[0] ?? '/start';
   if (callback) await telegramCall(secrets.token, 'answerCallbackQuery', { callback_query_id: callback.id });
-  if (data === '/id') { await send(chat.id, `${config.language === 'fa' ? 'شناسه عددی تلگرام شما' : 'Your numeric Telegram ID'}: ${userId}`); return; }
+  if (data === '/id') { await send(chat.id, `${botText(config, 'idLabel')}: ${userId}`); return; }
   if (data.startsWith('approve:') || data.startsWith('reject:')) {
     if (!config.transfer.adminIds.includes(String(userId))) { await send(chat.id, config.language === 'fa' ? 'فقط مدیر مجاز می‌تواند پرداخت را بررسی کند.' : 'Only an authorized admin can review payments.'); return; }
     const [, orderId, version] = data.split(':'), approved = data.startsWith('approve:');
@@ -218,43 +226,43 @@ async function processUpdate(env: Env, update: Update) {
   if (message?.photo || message?.document) { await acceptReceipt(env, userId!, message, config, secrets.token); return; }
   if (data.startsWith('receipt:')) {
     const order = await env.DB.prepare("SELECT * FROM telegram_orders WHERE id=? AND user_id=? AND payment_method='transfer' AND status='awaiting_receipt'").bind(data.slice(8), userId).first<Order>();
-    if (!order || Date.now() - (order.reviewed_at || order.created_at) > 86400000) { await send(chat.id, config.language === 'fa' ? 'این سفارش قابل ارسال رسید نیست.' : 'This order is not awaiting a receipt.'); return; }
+    if (!order || Date.now() - (order.reviewed_at || order.created_at) > 86400000) { await send(chat.id, botText(config, 'noReceipt')); return; }
     await env.DB.prepare('INSERT INTO telegram_receipt_sessions(user_id,order_id,expires_at) VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET order_id=excluded.order_id,expires_at=excluded.expires_at').bind(userId, order.id, Date.now() + 3600000).run();
-    await send(chat.id, config.language === 'fa' ? `عکس رسید سفارش ${order.id.slice(0, 8)} را همین‌جا ارسال کنید. ارسال عکس به معنی تأیید پرداخت نیست.` : `Send a receipt photo for order ${order.id.slice(0, 8)} here. Uploading a receipt does not confirm payment.`); return;
+    await send(chat.id, `${botText(config, 'receiptPrompt')}\n${order.id.slice(0, 8)}`); return;
   }
-  if (['support', '/support', '/paysupport'].includes(data)) { await send(chat.id, config.support || 'Customer support is being configured.'); return; }
-  if (['terms', '/terms'].includes(data)) { await send(chat.id, config.terms || 'Purchase terms are being configured.'); return; }
+  if (['support', '/support', '/paysupport'].includes(data)) { await send(chat.id, config.support || botText(config, 'noSupport')); return; }
+  if (['terms', '/terms'].includes(data)) { await send(chat.id, config.terms || botText(config, 'noTerms')); return; }
   if (['configs', '/myconfigs'].includes(data)) {
     const rows = (await env.DB.prepare("SELECT * FROM telegram_orders WHERE user_id=? AND status IN ('paid','processing','delivery_failed','delivered','awaiting_receipt','awaiting_approval') ORDER BY created_at DESC LIMIT 10").bind(userId).all<Order>()).results;
-    if (!rows.length) await send(chat.id, config.language === 'fa' ? 'هنوز خریدی ندارید.' : 'You have no purchases yet.');
+    if (!rows.length) await send(chat.id, botText(config, 'noPurchases'));
     for (const row of rows) {
       if (row.status === 'delivered') await send(chat.id, await decrypt<string>(row.delivery, env.ENCRYPTION_KEY), { protect_content: true });
-      else if (['awaiting_receipt', 'awaiting_approval'].includes(row.status)) await send(chat.id, `${row.product_name} · ${row.id.slice(0, 8)}\n${storeAmount(row.amount, row.currency, config.language)}\n${row.status === 'awaiting_approval' ? config.language === 'fa' ? 'در انتظار بررسی مدیر' : 'Awaiting admin review' : config.language === 'fa' ? 'در انتظار ارسال رسید' : 'Awaiting your receipt'}`, { ...(row.status === 'awaiting_receipt' ? { reply_markup: { inline_keyboard: [[{ text: config.language === 'fa' ? 'ارسال رسید' : 'Send receipt', callback_data: `receipt:${row.id}` }]] } } : {}) });
-      else await send(chat.id, `${row.product_name}\n${config.language === 'fa' ? 'پرداخت تأیید شده؛ تحویل سرویس در حال انجام است.' : 'Payment received. Delivery is pending.'}\n${config.support}`);
+      else if (['awaiting_receipt', 'awaiting_approval'].includes(row.status)) await send(chat.id, `${row.product_name} · ${row.id.slice(0, 8)}\n${storeAmount(row.amount, row.currency, config.language)}\n${row.status === 'awaiting_approval' ? botText(config, 'reviewing') : botText(config, 'waitingReceipt')}`, { ...(row.status === 'awaiting_receipt' ? { reply_markup: { inline_keyboard: [[{ text: botText(config, 'sendReceipt'), callback_data: `receipt:${row.id}` }]] } } : {}) });
+      else await send(chat.id, `${row.product_name}\n${botText(config, 'pendingDelivery')}\n${config.support}`);
     } return;
   }
-  if (!config.enabled) { await send(chat.id, config.language === 'fa' ? 'فروشگاه موقتاً بسته است. برای خریدهای قبلی از /myconfigs استفاده کنید.' : 'The store is paused. Use /myconfigs for existing purchases.'); return; }
+  if (!config.enabled) { await send(chat.id, botText(config, 'paused')); return; }
   if (data === 'plans') {
-    if (!config.starsEnabled && !config.transfer.enabled) { await send(chat.id, config.language === 'fa' ? 'پرداخت در حال حاضر فعال نیست.' : 'Payments are currently unavailable.'); return; }
-    const products = config.products.filter(p => p.enabled); await send(chat.id, config.language === 'fa' ? 'سرویس خود را انتخاب کنید:' : 'Choose your plan:', { reply_markup: { inline_keyboard: chunks(products.map(p => ({ text: `${p.name} · ${storeAmount(config.transfer.enabled ? p.transferPrice! : p.price, config.transfer.enabled ? config.transfer.currency : 'XTR', config.language)}`, callback_data: `product:${p.id}` })), config.buttonColumns) } }); return;
+    if (!config.starsEnabled && !config.transfer.enabled) { await send(chat.id, botText(config, 'unavailable')); return; }
+    const products = config.products.filter(p => p.enabled); await send(chat.id, botText(config, 'choose'), { reply_markup: { inline_keyboard: chunks(products.map(p => ({ text: `${p.name} · ${productPrices(p, config)}`, callback_data: `product:${p.id}` })), config.buttonColumns) } }); return;
   }
   if (data.startsWith('product:')) {
-    const p = config.products.find(p => p.id === data.slice(8) && p.enabled); if (!p) { await send(chat.id, 'This plan is no longer available.'); return; }
-    await send(chat.id, `${p.name}\n${p.description}${config.starsEnabled ? `\n${storeAmount(p.price, 'XTR', config.language)}` : ''}\n\n${config.terms}`, { reply_markup: { inline_keyboard: [...(config.starsEnabled ? [[{ text: config.language === 'fa' ? 'قبول قوانین و پرداخت با استارز ⭐' : 'Agree & pay with Stars ⭐', callback_data: `buy:${p.id}` }]] : []), ...(config.transfer.enabled ? [[{ text: config.language === 'fa' ? `کارت به کارت · ${storeAmount(p.transferPrice!, config.transfer.currency, 'fa')}` : `Card transfer · ${storeAmount(p.transferPrice!, config.transfer.currency)}`, callback_data: `transfer:${p.id}` }]] : []), [{ text: '←', callback_data: 'plans' }]] } }); return;
+    const p = config.products.find(p => p.id === data.slice(8) && p.enabled); if (!p) { await send(chat.id, botText(config, 'planGone')); return; }
+    await send(chat.id, `${p.name}\n${p.description}${config.starsEnabled ? `\n${storeAmount(p.price, 'XTR', config.language)}` : ''}\n\n${config.terms}`, { reply_markup: { inline_keyboard: [...(config.starsEnabled ? [[{ text: botText(config, 'pay'), callback_data: `buy:${p.id}` }]] : []), ...(config.transfer.enabled ? [[{ text: `${botText(config, 'transferLabel')} · ${storeAmount(p.transferPrice!, config.transfer.currency, config.language)}`, callback_data: `transfer:${p.id}` }]] : []), [{ text: botText(config, 'back'), callback_data: 'plans' }]] } }); return;
   }
   if (data.startsWith('buy:') || data.startsWith('transfer:')) {
-    const manual = data.startsWith('transfer:'); if (!manual && !config.starsEnabled) { await send(chat.id, config.language === 'fa' ? 'پرداخت با استارز غیرفعال است.' : 'Stars payments are disabled.'); return; } if (manual && !config.transfer.enabled) { await send(chat.id, 'Card transfers are unavailable.'); return; }
-    const p = config.products.find(p => p.id === data.slice(manual ? 9 : 4) && p.enabled); if (!p) { await send(chat.id, 'This plan is no longer available.'); return; }
+    const manual = data.startsWith('transfer:'); if (!manual && !config.starsEnabled) { await send(chat.id, botText(config, 'starsOff')); return; } if (manual && !config.transfer.enabled) { await send(chat.id, botText(config, 'transferOff')); return; }
+    const p = config.products.find(p => p.id === data.slice(manual ? 9 : 4) && p.enabled); if (!p) { await send(chat.id, botText(config, 'planGone')); return; }
     const pending = await env.DB.prepare("SELECT COUNT(*) AS n FROM telegram_orders WHERE user_id=? AND status IN ('pending','awaiting_receipt','awaiting_approval') AND created_at>?").bind(userId, Date.now() - 3600000).first<{ n: number }>();
-    if ((pending?.n || 0) >= 3) { await send(chat.id, 'You already have three open invoices. Complete one or try again later.'); return; }
+    if ((pending?.n || 0) >= 3) { await send(chat.id, botText(config, 'invoiceLimit')); return; }
     const ready = await target(env, p), id = crypto.randomUUID();
     await env.DB.prepare('INSERT OR IGNORE INTO telegram_orders(id,update_key,user_id,product_name,amount,created_at,email,snapshot,status,currency,payment_method) VALUES(?,?,?,?,?,?,?,?,?,?,?)').bind(id, update.update_id, userId, p.name, manual ? p.transferPrice! : p.price, Date.now(), `store-${id}`, JSON.stringify({ terms: config.terms, product: p, service: ready.service, serverId: ready.server.id, ...(manual ? { transfer: config.transfer } : {}) }), manual ? 'awaiting_receipt' : 'pending', manual ? config.transfer.currency : 'XTR', manual ? 'transfer' : 'stars').run();
     const order = await env.DB.prepare('SELECT * FROM telegram_orders WHERE update_key=?').bind(update.update_id).first<Order>();
     if (!order || !['pending', 'awaiting_receipt'].includes(order.status)) return;
     if (manual) {
       const transfer = (JSON.parse(order.snapshot) as Snapshot & { transfer: StoreConfig['transfer'] }).transfer;
-      const card = transfer.cardNumber.match(/.{1,4}/g)!.join(' '), fa = config.language === 'fa';
-      await send(chat.id, `${p.name} · ${order.id.slice(0, 8)}\n${fa ? 'مبلغ دقیق' : 'Exact amount'}: ${storeAmount(order.amount, order.currency, config.language)}\n${fa ? 'شماره کارت' : 'Card number'}: \u2066${card}\u2069\n${transfer.cardHolder} · ${transfer.bankName}\n\n${transfer.instructions}\n${fa ? 'با انتخاب کارت به کارت، قوانین خرید را پذیرفته‌اید. پس از انتقال، روی «ارسال رسید» بزنید. سرویس پس از بررسی و تأیید مدیر فعال می‌شود.' : 'Choosing card transfer accepts the purchase terms. After transferring, tap Send receipt. Access activates after admin approval.'}`, { reply_markup: { inline_keyboard: [[{ text: fa ? 'ارسال رسید 📎' : 'Send receipt 📎', callback_data: `receipt:${order.id}` }]] } }); return;
+      const card = transfer.cardNumber.match(/.{1,4}/g)!.join(' ');
+      await send(chat.id, `${p.name} · ${order.id.slice(0, 8)}\n${botText(config, 'amount')}: ${storeAmount(order.amount, order.currency, config.language)}\n${botText(config, 'card')}: \u2066${card}\u2069\n${transfer.cardHolder} · ${transfer.bankName}\n\n${transfer.instructions}\n${botText(config, 'consent')}`, { reply_markup: { inline_keyboard: [[{ text: botText(config, 'sendReceipt'), callback_data: `receipt:${order.id}` }]] } }); return;
     }
     await telegramCall(secrets.token, 'sendInvoice', { chat_id: chat.id, title: p.name, description: p.description, payload: order.id, provider_token: '', currency: 'XTR', prices: [{ label: p.name, amount: p.price }], start_parameter: `order_${order.id.replaceAll('-', '')}` }); return;
   }
@@ -300,14 +308,15 @@ export async function fulfillOrder(env: Env, id: string) {
       if (!synced) throw new HttpError(409, 'Service rules could not be saved.');
       await callRemoteJson(server, env, { path: `/panel/api/clients/update/${encodeURIComponent(client.email)}`, method: 'POST', body: { ...client, enable: true } });
       const token = await issueStoreSubscription(env, server, client.email, client.subId!);
-      const root = new URL(row.webhook).origin, links: string[] = [];
       const policy = await policyFor(env, server.id);
+      const root = policy.subscriptionOrigin || new URL(row.webhook).origin, links: string[] = [];
       for (const format of service.formats.filter(f => policy.subscriptions[f]?.enabled !== false)) {
         const url = `${root}/sub/${token}/${format}`;
         // Confirm this format can actually be rendered before offering it to the buyer.
         try { await publicSubscription(new Request(url), env); links.push(`${formatNames[format]}:\n${url}`); } catch { /* Unrepresentable transports are omitted, never advertised as working. */ }
       }
       if (!links.length) { await callRemoteJson(server, env, { path: `/panel/api/clients/update/${encodeURIComponent(client.email)}`, method: 'POST', body: { ...client, enable: false } }); throw new HttpError(409, 'No subscription format can render this service.'); }
+      links.unshift(botText(config, 'page') + ':\n' + root + '/sub/' + token + '/page');
       delivery = `${config.thankYou}\n\n${order.product_name}\n${service.rules.quotaGB || '∞'} ${config.language === 'fa' ? 'گیگابایت' : 'GB'} · ${service.rules.expiryDays || '∞'} ${config.language === 'fa' ? 'روز' : 'days'}\n\n${links.join('\n\n')}`;
       await env.DB.prepare('UPDATE telegram_orders SET delivery=? WHERE id=?').bind(await encrypt(delivery, env.ENCRYPTION_KEY), id).run();
     }

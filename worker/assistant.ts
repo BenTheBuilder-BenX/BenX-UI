@@ -109,7 +109,7 @@ export async function assistantRoute(request: Request, env: Env, ctx: ExecutionC
   const secret = await encrypt(document, env.ENCRYPTION_KEY), revision = row.revision + 1, now = Date.now();
   const guard = 'EXISTS(SELECT 1 FROM managed_state m WHERE m.server_id=? AND m.revision=? AND m.document=?)';
   const result = await env.DB.batch([
-    env.DB.prepare("UPDATE managed_state SET document=?,revision=?,phase='pending',error='',updated_at=? WHERE server_id=? AND revision=? AND lease_until<? AND EXISTS(SELECT 1 FROM assistant_drafts WHERE id=? AND state='proposed')").bind(secret, revision, now, server.id, row.revision, now, draft.id),
+    env.DB.prepare("UPDATE managed_state SET document=?,revision=?,phase='pending',error='',updated_at=? WHERE server_id=? AND revision=? AND document=? AND lease_until<? AND EXISTS(SELECT 1 FROM assistant_drafts WHERE id=? AND state='proposed')").bind(secret, revision, now, server.id, row.revision, row.document, now, draft.id),
     env.DB.prepare(`INSERT INTO managed_versions(server_id,revision,document,created_at) SELECT ?,?,?,? WHERE ${guard}`).bind(server.id, revision, secret, now, server.id, revision, secret),
     env.DB.prepare(`INSERT INTO server_policy(server_id,revision,data,updated_at) SELECT ?,?,?,? WHERE ${guard} ON CONFLICT(server_id) DO UPDATE SET revision=excluded.revision,data=excluded.data,updated_at=excluded.updated_at`).bind(server.id, document.policy.revision, JSON.stringify(document.policy), now, server.id, revision, secret),
     env.DB.prepare(`UPDATE assistant_drafts SET state='applied',applied_revision=? WHERE id=? AND ${guard}`).bind(revision, draft.id, server.id, revision, secret),

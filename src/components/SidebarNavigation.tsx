@@ -30,10 +30,10 @@ const groups: Array<{ label: string; pages: Page[] }> = [
   { label: 'Operations', pages: ['account', 'logs', 'backups', 'audit'] },
   { label: 'Advanced tools', pages: ['nodes', 'locations', 'testing', 'api'] },
 ];
-export function SidebarNavigation({ page, administrator, search, navigate }: { page: Page; administrator: boolean; search: string; navigate: (page: Page) => void }) {
+export function SidebarNavigation({ page, administrator, manageStore = false, search, navigate }: { page: Page; administrator: boolean; manageStore?: boolean; search: string; navigate: (page: Page) => void }) {
   useLocale();
   const query = search.trim().toLocaleLowerCase();
-  const allowed = nav.filter(n => (!administrator || !['team', 'telegram', 'servers'].includes(n.id)) && (!query || `${n.label} ${t(n.label)}`.toLocaleLowerCase().includes(query)));
+  const allowed = nav.filter(n => (!administrator || !['team', 'servers'].includes(n.id) && (n.id !== 'telegram' || manageStore)) && (!query || `${n.label} ${t(n.label)}`.toLocaleLowerCase().includes(query)));
   const item = (id: Page) => {
     const entry = allowed.find(n => n.id === id);
     if (!entry) return null;

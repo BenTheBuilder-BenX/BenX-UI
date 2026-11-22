@@ -2,9 +2,9 @@
 
 **پنل مدیریت VPN روی Cloudflare Workers — ساخته‌شده توسط Ben the Builder**
 
-[English](README.md) · [راهنمای کامل فارسی](docs/guide.fa.md) · [نصب انگلیسی](docs/easy-install.md) · [تنظیمات Cloudflare](docs/cloudflare.md) · [تغییرات و بررسی نسخه جدید](docs/release-2026-11-20.md)
+[English](README.md) · [راهنمای همهٔ بخش‌ها](docs/operator-guide.fa.md) · [نصب فارسی](docs/guide.fa.md) · [راهنمای انگلیسی](docs/operator-guide.md) · [تغییرات این نسخه](docs/release-2026-11-22.md)
 
-آخرین پیش‌نمایش کد: **[v0.9.0-preview.2](https://github.com/BenTheBuilder-BenX/BenX-UI/releases/tag/v0.9.0-preview.2)** — فهرست سریع‌تر مشتریان، بازنشانی وضعیت هنگام تغییر سرور، حفظ وضعیت آنلاین در به‌روزرسانی پس‌زمینه و مدیریت بهتر خطاهای API و آمار. [یادداشت انتشار](docs/release-2026-11-20.md).
+**[v0.9.0-preview.3](https://github.com/BenTheBuilder-BenX/BenX-UI/releases/tag/v0.9.0-preview.3)** حسابداری حجمی MasterDNS با VLESS خصوصی، تحویل خودکار خرید تلگرام و راهنمای فارسی و انگلیسی داخل پنل را اضافه می‌کند. [یادداشت انتشار](docs/release-2026-11-22.md)
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2FBenTheBuilder-BenX%2FBenX-UI)
 
@@ -49,6 +49,15 @@ npm ci
 npx wrangler login
 npm run deploy
 ```
+
+## از اینجا شروع کنید
+
+| کار | راهنمای قدم‌به‌قدم |
+| --- | --- |
+| اشتراک DNS با حجم محدود | [اتصال به VLESS خصوصی و حسابداری](docs/operator-guide.fa.md#masterdns) · [رکوردهای A/AAAA و NS](docs/operator-guide.fa.md#dns) |
+| فروش و تحویل خودکار در تلگرام | [راه‌اندازی ربات، پرداخت و بازیابی سفارش](docs/operator-guide.fa.md#telegram) · [تعریف سرویس](docs/operator-guide.fa.md#services) |
+| اتصال VPN و تونل سرور | [اتصال کلاینت‌های بومی](docs/operator-guide.fa.md#native) · [مقایسهٔ پنج تونل](docs/operator-guide.fa.md#tunneling) |
+| مدیریت روزانه | [مدیر و نماینده](docs/operator-guide.fa.md#team) · [مشتری](docs/operator-guide.fa.md#clients) · [لینک اشتراک](docs/operator-guide.fa.md#subscriptions) · [همهٔ بخش‌ها](docs/operator-guide.fa.md) |
 
 ## امکانات و محدودیت‌ها
 

@@ -2,6 +2,8 @@
 
 BenX runs on your Cloudflare Worker. Your VPS runs the VPN cores. You do not need another panel, a manually created database, a session secret or a password of your own choosing to get started.
 
+After activation, use the [operator guide](operator-guide.md) or [راهنمای بخش‌های پنل](operator-guide.fa.md) for DNS, limits, customer links, tunnels and Telegram checkout.
+
 ## Install from GitHub
 
 The public source is [BenTheBuilder-BenX/BenX-UI](https://github.com/BenTheBuilder-BenX/BenX-UI). Use the official **Deploy to Cloudflare** button in [README](../README.md). [راهنمای فارسی](guide.fa.md).
@@ -65,14 +67,14 @@ Normal deployments preserve existing keys and login. The built-in migration runn
 
 Recovery commands require Cloudflare account control. They are not public password-reset endpoints. A stolen private activation/recovery link grants owner access until used; protect build access and rotate the link if exposed.
 
-## Maintainer: attach the real deploy button
+## Maintainer setup for a fork
 
-After the reviewed clean source is assigned its actual public repository URL, run:
+When moving the project to a different public repository, update that fork’s metadata and Deploy button.
 
 ```sh
 npm run release:repository -- <actual-public-repository-url>
 ```
 
-This updates package repository metadata and an idempotent official Deploy-button block in README. It does not create a repository, push, publish or deploy anything. Commit the result to that repository when publication is authorized. Cloudflare cannot deploy from this unpublished local directory by public-repository link.
+Commit the generated README and package metadata to your fork. The main repository already points to its own public URL.
 
 Before launch, complete [release acceptance](release-acceptance.md), including a real fresh-account install and an existing-account upgrade. Local test results and deployment dry runs do not prove that account consent, provider authorization or live VPS traffic works.

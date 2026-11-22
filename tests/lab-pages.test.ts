@@ -8,7 +8,7 @@ import { emptyDocument, configurationView } from '../shared/managed';
 import { defaultLabSpec, previewLab, type LabSpec } from '../shared/lab';
 import { customSubscriptionStarter, defaultPageDesign, validatePageDesign } from '../shared/subscription-page';
 import { pageDesignRoute, subscriptionLanding } from '../worker/subscription-page';
-import { publicSubscription, issueStoreSubscription } from '../worker/subscriptions';
+import { publicSubscription, issueStoreSubscription, subscriptionAdmin } from '../worker/subscriptions';
 import { encrypt, decrypt } from '../worker/security';
 import { currentAIModel } from '../shared/assistant';
 import { parseObject } from '../shared/types';
@@ -121,6 +121,47 @@ describe('Config testing matrix', () => {
   it('handles large encrypted profile data without exceeding argument limits', async () => { const data = { sample: 'x'.repeat(600000) }; expect(await decrypt(await encrypt(data, f.env.ENCRYPTION_KEY), f.env.ENCRYPTION_KEY)).toEqual(data); });
 });
 describe('Designed customer subscription pages', () => {
+  it('returns the same usable link to simultaneous share requests, including after an identity change', async () => {
+    const server = f.db.prepare('SELECT * FROM servers').get() as unknown as import('../worker/remote').StoredServer;
+    let subId = 'first-identity';
+    vi.mocked(callRemoteJson).mockImplementation(async (_s, _e, req) => req.path.includes('/inbounds/') ? [] : { email: 'alice', subId, enable: true });
+    const share = async (reuse: boolean) => {
+      const req = new Request('https://benx.example/api/servers/s/subscriptions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'alice', reuse }) });
+      return (await (await subscriptionAdmin(req, f.env, server)).json() as { token: string }).token;
+    };
+    const open = (token: string) => publicSubscription(new Request('https://benx.example/sub/' + token + '/page'), f.env);
+    for (const identity of ['first-identity', 'second-identity']) {
+      subId = identity;
+      const tokens = await Promise.all([share(true), share(true), issueStoreSubscription(f.env, server, 'alice', subId)]);
+      expect(new Set(tokens).size).toBe(1);
+      expect((await open(tokens[0])).status).toBe(200);
+    }
+    const previous = await share(true), rotated = await share(false);
+    expect(rotated).not.toBe(previous);
+    await expect(open(previous)).rejects.toMatchObject({ status: 404 });
+    expect(await share(true)).toBe(rotated);
+  });
+  it('uses the same panel traffic and first-use deadline for the customer page and app feed', async () => {
+    f.db.exec("UPDATE servers SET kind='panel' WHERE id='s'");
+    const server = f.db.prepare('SELECT * FROM servers').get() as unknown as import('../worker/remote').StoredServer;
+    const token = await issueStoreSubscription(f.env, server, 'alice', 'identity');
+    const url = 'https://benx.example/sub/' + token;
+    const traffic = { up: 10, down: 20, expiryTime: Date.now() + 86400000 };
+    vi.mocked(callRemoteJson).mockImplementation(async (_s, _e, req) => req.path.includes('/links/') ? ['vless://11111111-1111-4111-8111-111111111111@example.com:443#test'] : {
+      client: { email: 'alice', subId: 'identity', totalGB: 100, enable: true, expiryTime: -86400000, traffic }, inboundIds: [1],
+    });
+    const feed = () => publicSubscription(new Request(url + '/v2box'), f.env);
+    const page = async () => (await publicSubscription(new Request(url + '/page?lang=en'), f.env)).text();
+    expect((await feed()).headers.get('subscription-userinfo')).toBe(`upload=10; download=20; total=100; expire=${Math.floor(traffic.expiryTime / 1000)}`);
+    expect(await page()).toContain('"download":20');
+    traffic.down = 90;
+    await expect(feed()).rejects.toMatchObject({ status: 403 });
+    expect(await page()).toContain('"active":false');
+    traffic.down = 0;
+    traffic.expiryTime = Date.now() - 1000;
+    await expect(feed()).rejects.toMatchObject({ status: 403 });
+    expect(await page()).toContain('"active":false');
+  });
   it('serves one general link as HTML in browsers and as V2Box data in an app', async () => {
     const server = f.db.prepare('SELECT * FROM servers').get() as unknown as import('../worker/remote').StoredServer;
     const token = await issueStoreSubscription(f.env, server, 'alice', 'identity');

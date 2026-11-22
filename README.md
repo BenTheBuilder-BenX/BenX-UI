@@ -2,9 +2,9 @@
 
 **A Cloudflare Worker VPN control panel — built by Ben the Builder.**
 
-[فارسی](README.fa.md) · [English setup](docs/easy-install.md) · [راهنمای فارسی](docs/guide.fa.md) · [Cloudflare operations](docs/cloudflare.md) · [Latest changes and validation](docs/release-2026-11-20.md)
+[فارسی](README.fa.md) · [Operator guide](docs/operator-guide.md) · [راهنمای همهٔ بخش‌ها](docs/operator-guide.fa.md) · [Installation](docs/easy-install.md) · [Cloudflare operations](docs/cloudflare.md)
 
-Latest source preview: **[v0.9.0-preview.2](https://github.com/BenTheBuilder-BenX/BenX-UI/releases/tag/v0.9.0-preview.2)** — faster client lists, server-switch state reset, preserved online status during background refresh, and improved API/metrics error handling. [Release notes](docs/release-2026-11-20.md).
+**[v0.9.0-preview.3](https://github.com/BenTheBuilder-BenX/BenX-UI/releases/tag/v0.9.0-preview.3)** adds metered MasterDNS subscriptions, Telegram purchase delivery for DNS plans, and English and Persian guides inside the panel. [Release notes](docs/release-2026-11-22.md)
 
 <!-- BENX_DEPLOY_BUTTON -->
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2FBenTheBuilder-BenX%2FBenX-UI)
@@ -50,6 +50,15 @@ npm run deploy
 ```
 
 See [English setup](docs/easy-install.md), [فارسی](docs/guide.fa.md) and [VPS launch guide](docs/launch-guide.md). Never replace an existing installation’s encryption key with a newly generated key.
+
+## Common tasks
+
+| Task | Walkthrough |
+| --- | --- |
+| Offer a limited-data DNS subscription | [Pair MasterDNS with private VLESS](docs/operator-guide.md#masterdns) · [Create the external A/AAAA and NS records](docs/operator-guide.md#dns) |
+| Sell and deliver a plan in Telegram | [Configure the bot, payments and order recovery](docs/operator-guide.md#telegram) · [Build the service](docs/operator-guide.md#services) |
+| Connect a VPN client or link two VPSs | [Native client setup](docs/operator-guide.md#native) · [Compare the five tunnels](docs/operator-guide.md#tunneling) |
+| Run the panel day to day | [Team access](docs/operator-guide.md#team) · [Customer management](docs/operator-guide.md#clients) · [Subscription links](docs/operator-guide.md#subscriptions) · [All sections](docs/operator-guide.md) |
 
 ## Features and known limits
 

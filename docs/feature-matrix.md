@@ -53,7 +53,7 @@ The native-first Cloudflare panel connects to the included privileged Linux agen
 | Inbounds and clients | CRUD, enabled state, multi-inbound attachments, protocol options, fixed expiry, isolated listener units |
 | Credentials and exports | OpenVPN certificates/.ovpn, SSH accounts/host key, ocserv accounts/certificate fingerprint, WireGuard keys/.conf, MasterDnsVPN encryption key/JSON profile |
 | MasterDnsVPN | Standalone unmetered DNS tunnel, or shared authenticated loopback VLESS backend with inner-payload metering. DNS overhead/retransmissions and independent outer-key revocation are not measured/supported |
-| Quotas | Weighted native client quotas for VLESS/VMess/Trojan/Shadowsocks/WireGuard; other cores reject quotas |
+| Quotas | Weighted native client quotas for VLESS, VMess, Trojan, Shadowsocks, native WireGuard and MasterDNS paired with private VLESS |
 | First-use expiry | Measured Xray/native WireGuard and supported metered MasterDNS backend only; starts on actual traffic |
 | IP/HWID limits and scheduled renewal | Native enforcement unavailable; unsupported writes rejected |
 | Traffic and online accounting | Persistent raw/weighted per-client counters; online presence remains unavailable |
@@ -66,10 +66,12 @@ The native-first Cloudflare panel connects to the included privileged Linux agen
 | Provider locations | Public VPNJantit directory, official guides, private imports, test-before-apply; NordVPN/PIA via panel API |
 | Firewall, forwarding and NAT | Host administrator configuration required |
 
+[Operator guide](operator-guide.md) · [راهنمای فارسی](operator-guide.fa.md)
+
 ## Validation boundaries
 
 Validated: TypeScript and lint checks; Worker bundle/deployment dry run; local Worker with real D1 migrations and persistence; credential encryption/tamper rejection; JWT verification and password rotation; origin checks; private address/DNS rejection; allowlist coverage; credential forwarding, cookie/CSRF adapters, redirects, legacy forms; core UI flows using demo data; native adapter output, rollback, input constraints, fixed-service isolation and download integrity with mocked Linux commands.
 
-Not validated: a real Telegram bot/Stars checkout/card-transfer receipt flow, a real 3X-UI panel, every remote API operation against every installed release, Cloudflare deployment with an actual account, packet transport or quota enforcement on a real Xray process, real Linux package installation, systemd lifecycle, native VPN client connectivity, and full upstream UI parity. No such live services or credentials were supplied. Telegram store payment, replay, customer isolation, delivery recovery, refund revocation, signed webhook and revision checks use a real in-memory SQLite schema with mocked external APIs.
+The MasterDNS integration test sends real loopback traffic using the pinned upstream client, server and Xray binaries. It verifies separate customer counters, weighted usage and individual cutoff. Telegram tests use SQLite with simulated provider responses for payment, replay, customer isolation, recovery, refunds and signed webhooks. Actual Telegram charges, a public recursive DNS route, each upstream panel release, and deployment to an operator’s Cloudflare account still require staging checks.
 
 The API snapshot was captured on 2026-10-01 from the public upstream main branch and the v2.8.10 route definitions. Future upstream changes require review before updating the allowlist.

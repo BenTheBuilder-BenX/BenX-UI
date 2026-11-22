@@ -42,7 +42,7 @@ If the nameserver is inside the delegated child zone, the DNS provider may requi
 1. Install **MasterDnsVPN** from Cores. The adapter pins an official release and verifies its SHA-256 checksum.
 2. Add a MasterDNSVPN inbound, listen on the public IPv4, use UDP **53**, and set `DOMAIN` to `tunnel.example.com`. Choose AES-256-GCM (method 5) or another supported encrypted method. Do not use the nameserver hostname as the tunnel domain.
 3. Allow UDP 53 at the VPS provider and verify that no ordinary DNS service occupies it.
-4. Create a client and attach it to this inbound. The adapter allows **one client identity per inbound**, because this core has one shared encryption key. Independent per-user traffic quotas and revocation are unavailable. Disabling the attached identity stops that tunnel instance.
+4. For an individual allowance, pair the DNS listener with a private authenticated VLESS backend, attach the customer to the DNS listener, and set the quota. Each customer gets a separate UUID. Standalone SOCKS5 mode uses a shared key. Anyone with the copied key can have unlimited access. [Metered setup](operator-guide.md#masterdns) · [راهنمای فارسی](operator-guide.fa.md#masterdns)
 5. Open **Clients → Share → Connections & profiles**. Download the JSON configuration and **client_resolvers.txt**. The profile contains the generated server key, domain and encryption method. Keep it private.
 6. Download the official client for the device. Run, substituting the actual binary and downloaded JSON filename:
 
@@ -50,11 +50,11 @@ If the nameserver is inside the delegated child zone, the DNS provider may requi
    MasterDnsVPN_Client -json alice-profile.json -resolvers client_resolvers.txt
    ```
 
-7. Connect the device’s proxy-capable application to local SOCKS5 `127.0.0.1:18000`. The profile disables local DNS hosting to avoid taking the device’s DNS port accidentally.
+7. For a metered TCP profile, start MasterDNS and import the customer’s subscription in a VLESS-capable app on the same device. Select the localhost MasterDNS entry. For standalone SOCKS5, set the application’s proxy to `127.0.0.1:18000`.
 
 The resolver file initially contains `1.1.1.1:53`, `8.8.8.8:53`, and `9.9.9.9:53`. These are examples, not guaranteed reachable or suitable in Iran. Change **clientResolvers** in the inbound’s Protocol settings if you have a tested list. Run the upstream client’s resolver/MTU checks from the actual user network. Direct testing can use `VPS_IP:31010` when that is the configured tunnel port; this bypasses recursive delegation and must not be described as a public-resolver acceptance test.
 
-An ordinary A record for `tunnel.example.com` does not delegate its subdomains. Germany now has `ns.ggmerch.ir NS ab.ggmerch.ir`, with `ab.ggmerch.ir A 140.82.33.6`. Its MasterDNSVPN listener on public UDP 53 passed a real HTTPS request through the default public resolver pool. This does not prove every resolver individually or access from Iran. UK remains a direct test on port 31010 until a delegated domain is supplied.
+Verify the NS and nameserver address with `dig NS t.example.com` and `dig A ns1.example.com`, substituting your actual names. Test the delegated listener through a recursive resolver from the intended customer network. A direct IP-and-port test checks a different path.
 
 ## Other cores
 
@@ -70,13 +70,13 @@ Install the selected core on the full-access server first. Create its inbound, t
 | MasterDNSVPN | Follow NS delegation and resolver-file instructions above. |
 | DNS resolver | Configure in DNS hosting. It is not a customer proxy inbound. |
 
-OpenVPN, OpenConnect and WireGuard can enable Internet access with scoped forwarding/NAT. Avoid overlapping private subnets. Native per-user weighted quota accounting is available for VLESS, VMess, Trojan, Shadowsocks and native WireGuard; the other adapters reject unsupported quota/IP/HWID limits rather than suggesting that they are enforced.
+OpenVPN, OpenConnect and WireGuard can enable Internet access with scoped forwarding/NAT. Avoid overlapping private subnets. Native per-user weighted quota accounting is available for VLESS, VMess, Trojan, Shadowsocks, native WireGuard and paired MasterDNS through VLESS. Other adapters reject unsupported quota/IP/HWID limits rather than suggesting that they are enforced.
 
 ## Choosing a server-to-server tunnel
 
-There is no universal best method. WireGuard is a strong starting point for an encrypted private link when UDP passes. Compare Phormal’s Hysteria/Salamander adapter for filtered UDP paths, and FRP WSS when TCP is more reliable. Hedioum remains an experimental alternative: the Germany–UK test had much lower throughput in one direction. GRE and IP-in-IP are unencrypted encapsulation, useful only when the network permits them and encrypted traffic is carried above them. Keep SSH for simple pinned forwarding.
+WireGuard creates an encrypted private link over UDP. SSH direct and reverse forward a selected TCP destination. FRP TLS and FRP WSS provide authenticated reverse TCP forwarding. Compare results on the intended pair of servers.
 
-All nine existing methods passed real Germany–UK transfers in the previous acceptance round. This is not evidence of reachability from Iran or proof of DPI resistance. Use **Compare tunnels** between the actual source/target locations, then test the user-facing connection from the real access network. Ratings in the panel are estimates; compare upload and download, not just one speed number. The upstream projects do not establish that a new recipe is universally better than the working choices, so none was silently replaced.
+New setups and comparisons offer these five methods. Historical GRE, IPIP, Backhaul, Phormal and Hedioum records remain available for inspection and cleanup. Follow [the tunnel walkthrough](operator-guide.md#tunneling) or [راهنمای تونل](operator-guide.fa.md#tunneling).
 
 ## VPNJantit and other free outbound locations
 
@@ -87,7 +87,7 @@ All nine existing methods passed real Germany–UK transfers in the previous acc
 5. Wait for server synchronization, then confirm the exit IP through the actual client. A directory listing alone is not proof of connectivity.
 6. Review Routing and Outbounds when the account expires. Removing a library entry does not remove an already applied outbound or rule.
 
-The single VPNJantit acceptance test routed Germany’s normal VLESS inbound through the user-issued NL3 profile, confirmed a provider exit address, and downloaded 64 KiB. Original routing was restored afterward. The short-lived profile is retained encrypted in the location library.
+For a provider profile, verify the expected exit IP and transfer a sample file from the client before relying on the route.
 
 ## Primary references
 

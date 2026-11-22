@@ -2,9 +2,10 @@ import { readPreference, writePreference } from './lib/preferences';
 import { SidebarNavigation, getPage } from './components/SidebarNavigation';
 import { t as translateUI } from './lib/i18n';
 import { LanguageSwitcher } from './components/LanguageSwitcher';
+import { FeatureGuide } from './components/FeatureGuide';
 import { PageBoundary } from './components/PageBoundary';
 import { workspace } from '../shared/workspaces';
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Activity, Bell, ChevronDown, Cloud, Code2, DatabaseBackup, Plus, FlaskConical, LogIn, LogOut, Menu, Moon, RefreshCw, Search, ShieldCheck, Sparkles, Sun, Terminal, Users, X } from 'lucide-react';
 import type { Inbound, Server, Status, RemoteRequest, ServerCapabilities } from '../shared/types';
 import { PanelContext, type Page } from './context';
@@ -47,7 +48,7 @@ const AIHelp = lazy(() => import('./components/AIHelp').then(m => ({ default: m.
 
 const emptyServer: Server = { id: '', name: 'No server connected', url: '', location: '', version: 'v3', kind: 'server', auth: 'token', subscription_url: '', enabled: 0, created_at: 0, online: undefined };
 
-export default function RootApp({ administrator = false, signedIn = false }: { administrator?: boolean; signedIn?: boolean }) {
+export default function RootApp({ administrator = false, signedIn = false, manageStore = false }: { administrator?: boolean; signedIn?: boolean; manageStore?: boolean }) {
   const [operationMode,setOperationMode]=useState<'manual'|'automatic'>('manual'),[modeVersion,setModeVersion]=useState(0),[syncBusy,setSyncBusy]=useState(false),[modeError,setModeError]=useState('');
   const loadMode=useCallback(async()=>{if(!signedIn){setModeVersion(1);return;}try{const r=await api<{mode:'manual'|'automatic';version:number}>('/operation-mode');setOperationMode(r.mode);setModeVersion(r.version);setModeError('');}catch(e){setModeError((e as Error).message);}},[signedIn]);
   useEffect(()=>{void loadMode();const focused=()=>{if(!document.hidden)void loadMode();};window.addEventListener('focus',focused);return()=>window.removeEventListener('focus',focused);},[loadMode]);
@@ -57,7 +58,7 @@ export default function RootApp({ administrator = false, signedIn = false }: { a
   const authenticated = signedIn;
   const [realServers, setRealServers] = useState<Server[]>([]), [selected, setSelected] = useState(signedIn ? '' : demoServers[0]?.id ?? '');
   const [serversReady, setServersReady] = useState(import.meta.env.DEV && !signedIn);
-  const [status, setStatus] = useState<Status | null>(demo ? demoStatus : null), [inbounds, setInbounds] = useState<Inbound[]>(demo ? newDemoData().inbounds : []), [online, setOnline] = useState<string[]>([]);
+  const [status, setStatus] = useState<Status | null>(demo ? demoStatus : null), [inbounds, setInbounds] = useState<Inbound[]>(demo ? newDemoData().inbounds : []), [online, setOnline] = useState<string[] | null>(null);
   const [samples, setSamples] = useState(demo ? demoSamples : []), [loading, setLoading] = useState(!demo), [error, setError] = useState(''), [lastUpdated, setLastUpdated] = useState(0);
   const [capabilities, setCapabilities] = useState<ServerCapabilities | null>(null);
   const [managedStatus, setManagedStatus] = useState<ManagedStatus | null>(), [syncError, setSyncError] = useState('');
@@ -78,11 +79,17 @@ export default function RootApp({ administrator = false, signedIn = false }: { a
   const [aiOpen, setAiOpen] = useState(false);
   const [connectOpen, setConnectOpen] = useState(false), [editServer, setEditServer] = useState<Server>();
   const cadence = useRef({ refreshed: 0, capabilities: 0, phase: '', revision: 0, requested: 0 });
-  const data = useRef(newDemoData()), epoch = useRef(0), refreshFlight = useRef<{ epoch: number } | null>(null);
+  const data = useRef(newDemoData()), epoch = useRef(0), refreshFlight = useRef<{ epoch: number; live: boolean; promise: Promise<void> } | null>(null);
   const [notifications, setNotifications] = useState<Array<{ id: number; message: string; error: boolean }>>([]);
-  const [confirmation, setConfirmation] = useState<{ title: string; description: string; danger: boolean; resolve: (value: boolean) => void }>();
+  const [confirmation, setConfirmation] = useState<{ title: string; description: string; danger: boolean; serverName: string; resolve: (value: boolean) => void }>();
   const servers = demo ? demoServers : realServers;
   const server = servers.find(s => s.id === selected) ?? servers[0] ?? emptyServer;
+  const connection = useMemo(() => ({ id: server.id, kind: server.kind, version: server.version, demo }), [server.id, server.kind, server.version, demo]);
+  const activeConnection = useRef<typeof connection | null>(null);
+  useLayoutEffect(() => {
+    activeConnection.current = connection;
+    return () => { activeConnection.current = null; epoch.current++; };
+  }, [connection]);
   useEffect(() => {
     let alive = true; setPolicyError('');
     if (demo) { const p = demoPolicies.current[server.id] ?? demoPolicy(data.current.inbounds); demoPolicies.current[server.id] = p; setPolicy(p); setPolicyReady(true); return; }
@@ -93,11 +100,12 @@ export default function RootApp({ administrator = false, signedIn = false }: { a
   }, [demo, server.id]);
   const savePolicy = useCallback(async (next: ServerPolicy) => {
     validatePolicy(next);
-    if (demo) { const p = { ...structuredClone(next), revision: next.revision + 1 }; demoPolicies.current[server.id] = p; setPolicy(p); return; }
+    if (demo) { const p = { ...structuredClone(next), revision: next.revision + 1 }; demoPolicies.current[server.id] = p; if (activeConnection.current === connection) setPolicy(p); return; }
     const result = await api<{ policy: ServerPolicy; syncError: string }>(`/servers/${server.id}/policy`, 'PUT', next);
+    if (activeConnection.current !== connection) return;
     setPolicy(result.policy); setPolicyError(result.syncError);
-    if (server.kind === 'server' && !result.syncError) { const caps = await panelRequest<ServerCapabilities>(server.id, { path: '/benx/v1/capabilities', method: 'GET' }).catch(() => null); if (caps) setCapabilities(caps); }
-  }, [demo, server.id, server.kind]);
+    if (server.kind === 'server' && !result.syncError) { const caps = await panelRequest<ServerCapabilities>(server.id, { path: '/benx/v1/capabilities', method: 'GET' }).catch(() => null); if (caps && activeConnection.current === connection) setCapabilities(caps); }
+  }, [demo, server.id, server.kind, connection]);
   useEffect(() => { if (!demo && policyReady && capabilities && server.kind === 'server' && policy.revision > 0) setPolicyError(managedStatus?.bound === 0 ? '' : (capabilities.policyRevision ?? 0) < policy.revision ? 'Traffic rules are saved. Server confirmation is pending; follow Synchronization.' : ''); }, [demo, policyReady, capabilities, server.kind, policy.revision, managedStatus?.bound]);
   const toast = useCallback((message: string, isError = false) => {
     const id = Date.now() + Math.random();
@@ -111,18 +119,17 @@ export default function RootApp({ administrator = false, signedIn = false }: { a
     if (!server.id) throw new Error('Connect a server first.');
     return panelRequest<T>(server.id, input);
   }, [demo, server.id, server.kind]);
-  const refresh = useCallback(async (live = true) => {
-    const requestEpoch = epoch.current;
-    if (refreshFlight.current?.epoch === requestEpoch) return;
-    if (!demo && !server.id) { setStatus(null); setInbounds([]); setOnline([]); setManagedStatus(null); setSyncError(''); setLoading(false); return; }
-    const flight = { epoch: requestEpoch }; refreshFlight.current = flight;
+  const readSnapshot = useCallback(async (live: boolean, requestEpoch: number) => {
+    if (!demo && !server.id) { setStatus(null); setInbounds([]); setOnline(null); setManagedStatus(null); setSyncError(''); setLoading(false); return; }
     setLoading(true); cadence.current.refreshed = Date.now();
     try {
     if (!demo && server.kind === 'server') {
       const includeCaps = !cadence.current.capabilities || Date.now() - cadence.current.capabilities > 300000 || cadence.current.phase !== 'synced';
-      const result = await api<{ status: Status | null; inbounds: Inbound[]; online: string[]; capabilities: ServerCapabilities | null; control: ManagedStatus | null; error: string; syncError: string }>(`/servers/${server.id}/dashboard?capabilities=${includeCaps ? 1 : 0}&saved=${live ? 0 : 1}`);
+      const result = await api<{ status: Status | null; inbounds: Inbound[]; inboundsAvailable?: boolean; online: string[]; capabilities: ServerCapabilities | null; control: ManagedStatus | null; error: string; syncError: string }>(`/servers/${server.id}/dashboard?capabilities=${includeCaps ? 1 : 0}&saved=${live ? 0 : 1}`);
       if (requestEpoch !== epoch.current) return;
-      if(live)setStatus(result.status); setInbounds(result.inbounds); setOnline(result.online); setManagedStatus(result.control); setSyncError(result.syncError); setError(result.error);
+      if (live) setStatus(result.status);
+      if (result.inboundsAvailable !== false) setInbounds(result.inbounds);
+      setManagedStatus(result.control); setSyncError(result.syncError); setError(result.error);
       if (result.status) setLastUpdated(Date.now());
       if (result.capabilities) { setCapabilities(result.capabilities); cadence.current.capabilities = Date.now(); }
       cadence.current.phase = result.control?.phase || '';
@@ -153,15 +160,29 @@ export default function RootApp({ administrator = false, signedIn = false }: { a
       setLastUpdated(Date.now());
     }
     if (results[1].status === 'fulfilled') { setInbounds(Array.isArray(results[1].value) ? results[1].value : []); if (unbound) setLastUpdated(Date.now()); }
-    if (live && results[2].status === 'fulfilled') setOnline(Array.isArray(results[2].value) ? results[2].value : []);
+    if (live) setOnline(results[2].status === 'fulfilled' && Array.isArray(results[2].value) ? results[2].value : null);
     if (results[3].status === 'fulfilled') setCapabilities(results[3].value);
     const failed = results.slice(0, 2).find((r, index) => r.status === 'rejected' && !(unbound && index === 0));
     setError(failed?.status === 'rejected' ? failed.reason instanceof Error ? failed.reason.message : 'Could not refresh the remote panel.' : '');
     } catch (e) { if (requestEpoch === epoch.current) setError(e instanceof Error ? e.message : 'Could not refresh the remote panel.'); }
-    finally { if (refreshFlight.current === flight) refreshFlight.current = null; if (requestEpoch === epoch.current) setLoading(false); }
   }, [demo, remote, server.id, server.version, server.kind]);
-  useEffect(() => {
-    epoch.current += 1; cadence.current = { refreshed: 0, capabilities: 0, phase: '', revision: 0, requested: 0 }; setCapabilities(null); setManagedStatus(undefined); setSyncError(''); setSamples(demo ? demoSamples : []); setStatus(demo ? demoStatus : null); setInbounds(demo ? data.current.inbounds : []); setOnline([]); setError(''); setLastUpdated(0);
+  const refresh = useCallback(async function refresh(live = true, afterChange = false): Promise<void> {
+    if (activeConnection.current !== connection) return;
+    const requestEpoch = epoch.current, running = refreshFlight.current;
+    if (running?.epoch === requestEpoch) {
+      await running.promise;
+      if (requestEpoch === epoch.current && (afterChange || live && !running.live)) await refresh(live);
+      return;
+    }
+    const flight = { epoch: requestEpoch, live, promise: readSnapshot(live, requestEpoch).finally(() => {
+      if (refreshFlight.current === flight) refreshFlight.current = null;
+      if (requestEpoch === epoch.current) setLoading(false);
+    }) };
+    refreshFlight.current = flight;
+    await flight.promise;
+  }, [connection, readSnapshot]);
+  useLayoutEffect(() => {
+    epoch.current += 1; cadence.current = { refreshed: 0, capabilities: 0, phase: '', revision: 0, requested: 0 }; setCapabilities(null); setManagedStatus(undefined); setSyncError(''); setSamples(demo ? demoSamples : []); setStatus(demo ? demoStatus : null); setInbounds(demo ? data.current.inbounds : []); setOnline(null); setError(''); setLastUpdated(0);
     if(modeVersion)void refresh(operationMode==='automatic');
     if (!demo && server.id && modeVersion) { const check = () => { const c=cadence.current,pending=['pending', 'applying', 'running', 'syncing'].includes(c.phase); if(operationMode==='manual' && !(pending && c.requested>=c.revision && c.revision>0))return; const interval = pending ? 15000 : 60000; if (!document.hidden && Date.now() - c.refreshed >= interval) void refresh(operationMode==='automatic'); }; const timer = setInterval(check, 15000); document.addEventListener('visibilitychange', check); return () => { clearInterval(timer); document.removeEventListener('visibilitychange', check); epoch.current += 1; }; }
   }, [demo, server.id, refresh,operationMode,modeVersion]);
@@ -181,7 +202,8 @@ export default function RootApp({ administrator = false, signedIn = false }: { a
     setEditServer(edit?.id.startsWith('demo-') ? undefined : edit);
     setConnectOpen(true);
   }, [authenticated, administrator, toast]);
-  const confirm = useCallback((title: string, description: string, danger = true) => new Promise<boolean>(resolve => setConfirmation({ title, description, danger, resolve })), []);
+  const confirm = useCallback((title: string, description: string, danger = true) => activeConnection.current === connection
+    ? new Promise<boolean>(resolve => setConfirmation({ title, description, danger, serverName: server.name, resolve })) : Promise.resolve(false), [connection, server.name]);
   const closeConfirm = useCallback(() => { confirmation?.resolve(false); setConfirmation(undefined); }, [confirmation]);
   const changeDemo = useCallback((next: boolean) => {
     if (next && !import.meta.env.DEV) return;
@@ -193,7 +215,7 @@ export default function RootApp({ administrator = false, signedIn = false }: { a
     try { await remote({ path: `/panel/api/server/${action === 'restart' ? 'restart' : 'stop'}XrayService`, method: 'POST' }); toast(server.kind === 'server' && !demo ? 'Xray action queued. Follow its status in Cores.' : `Xray ${action === 'restart' ? 'restarted' : 'stopped'}${demo ? ' in demo' : ''}.`); await refresh(); } catch (e) { toast((e as Error).message, true); }
   };
   const renderPage = () => {
-    if (administrator && ['team', 'telegram', 'servers'].includes(page)) return <Notice>{translateUI("Choose an assigned server to manage its configuration.")}</Notice>;
+    if (administrator && (['team', 'servers'].includes(page) || page === 'telegram' && !manageStore)) return <Notice>{translateUI("Choose an assigned server to manage its configuration.")}</Notice>;
     switch (page) {
       case 'launch': return <LaunchCenter />; case 'domains': return <Domains />;
       case 'account': return <Account />;
@@ -217,13 +239,13 @@ export default function RootApp({ administrator = false, signedIn = false }: { a
     }
   };
   if (!demo && !serversReady) return <div className="member-shell"><Notice tone={error ? 'error' : 'info'}>{error || (translateUI("Loading your servers…"))}{error && <Button onClick={() => location.reload()}>{translateUI("Retry")}</Button>}</Notice></div>;
-  return <PanelContext.Provider value={{ administrator, demo, authenticated, servers, server, status, inbounds, online, capabilities, policy, policyReady, policyError, savePolicy, samples, loading, error, lastUpdated, navigate, selectServer: setSelected, remote, operationMode, refresh: () => refresh(operationMode === "automatic"), refreshLive: () => refresh(true), toast, confirm, openConnect, reloadServers, setDemo: changeDemo, signIn: () => location.assign(["owner", "legacy"].includes(workspace(location.pathname).kind) ? "/sign-in" : location.pathname) }}>
+  return <PanelContext.Provider value={{ administrator, demo, authenticated, servers, server, status, inbounds, online, capabilities, policy, policyReady, policyError, savePolicy, samples, loading, error, lastUpdated, navigate, selectServer: setSelected, remote, operationMode, refresh: () => refresh(operationMode === "automatic", true), refreshLive: () => refresh(true), toast, confirm, openConnect, reloadServers, setDemo: changeDemo, signIn: () => location.assign(["owner", "legacy"].includes(workspace(location.pathname).kind) ? "/sign-in" : location.pathname) }}>
     <div className="app-shell"><a className="skip-link" href="#main-content" onClick={event => { event.preventDefault(); document.getElementById('main-content')?.focus(); }}>{translateUI("Skip to content")}</a>
       {mobileNav && <div className="sidebar-scrim" onClick={() => setMobileNav(false)} />}
       <aside className={`sidebar ${mobileNav ? 'visible' : ''}`}>
         <a href="#overview" className="brand" onClick={() => navigate('overview')}><span className="brand-icon">B<span>×</span></span><span>{translateUI("BenX")}<span className="brand-ui">{translateUI("-UI")}</span></span></a>
         <div className="nav-search"><Search size={15} /><input ref={searchRef} placeholder={translateUI("Search menu…")} value={search} onChange={e => setSearch(e.target.value)} aria-label={translateUI("Search navigation")} /><kbd>/</kbd></div>
-        <SidebarNavigation page={page} administrator={administrator} search={search} navigate={navigate} />
+        <SidebarNavigation page={page} administrator={administrator} manageStore={manageStore} search={search} navigate={navigate} />
         <div className="sidebar-bottom"><div className="edge-card"><Cloud size={20} /><div><strong>{translateUI("Powered by Cloudflare")}</strong><span>{translateUI("Your panel, at the edge.")}</span></div><i className="status-dot" /></div>
           <button className="nav-item logout" onClick={() => { if (authenticated) void api('/logout', 'POST').then(() => { location.reload(); }).catch(e => toast(e.message, true)); else location.assign(["owner", "legacy"].includes(workspace(location.pathname).kind) ? "/sign-in" : location.pathname); }}>
             {authenticated ? <LogOut size={17} /> : <LogIn size={17} />}<span>{authenticated ? translateUI("Log out") : translateUI("Admin sign in")}</span></button>
@@ -247,15 +269,16 @@ export default function RootApp({ administrator = false, signedIn = false }: { a
           </Notice>}
           {page !== "account" && !demo && managedStatus?.warning && <Notice tone="warning">{managedStatus.warning}</Notice>}
           {operationMode === "manual" && server.id && !["launch", "domains", "servers", "account"].includes(page) && <Notice><span>{translateUI("Manual mode: edits stay saved here until you apply the batch. Refresh server reads the latest live information.")}</span> <Button icon={RefreshCw} busy={loading} onClick={()=>void refresh(true)}>{translateUI("Refresh server")}</Button><Button variant="primary" busy={syncBusy} disabled={!managedStatus || managedStatus.bound === 0} onClick={()=>void applyBatch()}>{translateUI("Apply saved batch")}</Button></Notice>}
-          {page !== "account" && error && <Notice tone="error">{error} {lastUpdated > 0 && <span>{translateUI("Showing the last successful snapshot.")}</span>} <button className="text-link" onClick={() => void refresh()}>{translateUI("Retry")}</button></Notice>}
+          {page !== "account" && error && <Notice tone="error">{translateUI(error)} {lastUpdated > 0 && <span>{translateUI("Showing the last successful snapshot.")}</span>} <button className="text-link" onClick={() => void refresh()}>{translateUI("Retry")}</button></Notice>}
           {page === 'overview' && <details className="overview-operations"><summary>{translateUI("Server actions ")}<ChevronDown size={13} /></summary><div><Button icon={RefreshCw} onClick={() => void serviceAction('restart')}>{translateUI("Restart Xray")}</Button><Button icon={Activity} variant="ghost" onClick={() => void serviceAction('stop')}>{translateUI("Stop Xray")}</Button><Button icon={Terminal} variant="ghost" onClick={() => navigate('logs')}>{translateUI("Logs")}</Button><Button icon={Code2} variant="ghost" onClick={() => navigate('xray')}>{translateUI("Config")}</Button><Button icon={DatabaseBackup} variant="ghost" onClick={() => navigate('backups')}>{translateUI("Backup & restore")}</Button></div></details>}
+          <FeatureGuide key={page} topic={page} />
           <PageBoundary key={page + server.id}><Suspense fallback={<Notice>{translateUI("Opening this section…")}</Notice>}>{renderPage()}</Suspense></PageBoundary>
           <footer className="page-footer"><span>{translateUI("BenX-UI · Built for the edge")}</span><span><ShieldCheck size={13} /> {import.meta.env.DEV && demo ? translateUI("Sample data · No live servers") : translateUI("Encrypted connections · HTTPS")}</span></footer>
         </main>
       </div>
     </div>
     <div className="toasts" role="status" aria-live="polite">{notifications.map(n => <div className={`toast ${n.error ? 'error' : ''}`} key={n.id}><span>{translateUI(n.message)}</span><IconButton icon={X} label={translateUI("Dismiss notification")} onClick={() => setNotifications(t => t.filter(x => x.id !== n.id))} /></div>)}</div>
-    {confirmation && <Modal title={translateUI(confirmation.title)} description={translateUI(confirmation.description)} onClose={closeConfirm} footer={<><Button onClick={closeConfirm}>{translateUI("Cancel")}</Button><Button variant={confirmation.danger ? 'danger' : 'primary'} onClick={() => { confirmation.resolve(true); setConfirmation(undefined); }}>{translateUI("Confirm")}</Button></>}><Notice tone={confirmation.danger ? 'warning' : 'info'}>{demo ? translateUI("This action only changes demo data.") : translateUI("Selected server: {0}", server.name)}</Notice></Modal>}
+    {confirmation && <Modal title={translateUI(confirmation.title)} description={translateUI(confirmation.description)} onClose={closeConfirm} footer={<><Button onClick={closeConfirm}>{translateUI("Cancel")}</Button><Button variant={confirmation.danger ? 'danger' : 'primary'} onClick={() => { confirmation.resolve(true); setConfirmation(undefined); }}>{translateUI("Confirm")}</Button></>}><Notice tone={confirmation.danger ? 'warning' : 'info'}>{demo ? translateUI("This action only changes demo data.") : translateUI("Selected server: {0}", confirmation.serverName)}</Notice></Modal>}
     {connectOpen && <PageBoundary><Suspense fallback={<Notice>{translateUI("Opening this section…")}</Notice>}><ServerDialog existing={editServer} onClose={() => setConnectOpen(false)} onSaved={async id => { await reloadServers(); setDemo(false); setSelected(id); setConnectOpen(false); toast('Server connection saved.'); }} /></Suspense></PageBoundary>}
     {aiOpen && <Suspense fallback={<Notice>{translateUI("Opening AI help…")}</Notice>}><AIHelp onClose={() => setAiOpen(false)} /></Suspense>}
   </PanelContext.Provider>;

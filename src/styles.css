@@ -114,6 +114,19 @@
 .skip-link { position: fixed; inset-block-start: -100px; inset-inline-start: 16px; z-index: 9999; padding: 12px 20px; background: #1677ff; color: white; border-radius: 8px; }
 .skip-link:focus { inset-block-start: 12px; }
 #main-content:focus { outline: none; }
+.feature-guide { border: 1px solid var(--border); border-radius: 10px; margin-block: 0 14px; background: var(--surface); }
+.feature-guide > summary { display: flex; gap: 8px; align-items: center; cursor: pointer; padding: 10px 14px; width: fit-content; color: var(--text); font-weight: 600; list-style: none; }
+.feature-guide > summary::-webkit-details-marker { display: none; }
+.feature-guide[open] .guide-chevron { transform: rotate(180deg); }
+.guide-content { padding: 2px 16px 14px; max-width: 85ch; overflow-wrap: anywhere; }
+.guide-controls { display: flex; align-items: end; flex-wrap: wrap; gap: 10px; margin-block: 6px 14px; }
+.guide-controls label { flex: 1 1 13rem; display: grid; gap: 4px; font-size: .82rem; min-width: 0; }
+.guide-controls label:last-child { flex: 0 1 8rem; }
+.guide-controls select { width: 100%; }
+.guide-content h3 { margin-block: 10px; }
+.guide-content ol { padding-inline-start: 1.8em; margin: 0; }
+.guide-content li { line-height: 1.65; margin-block: 6px; }
+.guide-content code { display: inline-block; unicode-bidi: isolate; font-size: .9em; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }

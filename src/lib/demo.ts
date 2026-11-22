@@ -76,7 +76,7 @@ export function runDemo(input: RemoteRequest, data: DemoData, fullAccess = false
   if (p.includes('/clients/get/')) {
     const c = data.inbounds.flatMap(inboundClients).find(c => c.email === decodeURIComponent(end));
     if (!c) throw new Error('Client not found.');
-    return c;
+    return { ...c, inboundIds: data.inbounds.filter(i => inboundClients(i).some(client => client.email === c.email)).map(i => i.id) };
   }
   if (p.endsWith('/clients/add') || p.endsWith('/inbounds/addClient')) {
     const c = (b.client ?? (parseObject(b.settings).clients as Client[])?.[0]) as Client;

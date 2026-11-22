@@ -329,6 +329,17 @@ class AgentTests(unittest.TestCase):
         self.assertEqual(ledger['usage']['alice']['up'], 200)
         self.assertNotIn('1', ledger['inbounds'])
 
+    def test_failed_client_reset_keeps_usage_until_the_listener_applies(self):
+        state = self.state(clients={'alice': {**self.client(), 'totalGB': 100, '_quotaBlocked': True}})
+        agent.write_private(self.root / 'state.json', json.dumps(state))
+        usage = {'alice': {'up': 180, 'down': 20, 'rawUp': 90, 'rawDown': 10}}
+        agent.write_private(self.root / 'accounting.json', json.dumps({'usage': usage, 'raw': {}}))
+        with patch.object(agent, 'apply_state', side_effect=agent.AgentError('service failed')):
+            with self.assertRaises(agent.AgentError):
+                agent.dispatch('/panel/api/clients/resetTraffic/alice', 'POST', {})
+        self.assertEqual(json.loads((self.root / 'accounting.json').read_text())['usage'], usage)
+        self.assertTrue(agent.load_state()['clients']['alice']['_quotaBlocked'])
+
     def test_expired_listener_counters_are_collected_before_stopping(self):
         inbound = {**self.inbound(), 'expiryTime': 1}
         state = self.state(inbound, {'alice': self.client()})
