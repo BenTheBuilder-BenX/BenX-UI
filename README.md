@@ -2,6 +2,8 @@
 
 **A Cloudflare Worker VPN control panel — built by Ben the Builder.**
 
+**[Download the illustrated panel handbook](https://github.com/BenTheBuilder-BenX/BenX-UI/raw/refs/heads/main/docs/panel-guide.zip)** · Unzip and open `BenX-UI-guide.html` in your browser. Includes English and فارسی, a setup checklist, searchable sections and step-by-step instructions. [View the HTML file](docs/panel-guide.html)
+
 [فارسی](README.fa.md) · [Operator guide](docs/operator-guide.md) · [راهنمای همهٔ بخش‌ها](docs/operator-guide.fa.md) · [Installation](docs/easy-install.md) · [Cloudflare operations](docs/cloudflare.md)
 
 **[v0.9.0-preview.3](https://github.com/BenTheBuilder-BenX/BenX-UI/releases/tag/v0.9.0-preview.3)** adds metered MasterDNS subscriptions, Telegram purchase delivery for DNS plans, and English and Persian guides inside the panel. [Release notes](docs/release-2026-11-22.md)

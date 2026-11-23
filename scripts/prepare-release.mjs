@@ -14,7 +14,7 @@ copy('wrangler.example.jsonc', 'wrangler.jsonc');
 mkdirSync(join(destination, 'scripts'));
 for (const file of ['sync-agent.mjs', 'sync-migrations.mjs', 'deploy.mjs', 'setup-local.mjs', 'set-repository.mjs', 'verify-published-build.mjs', 'prepare-release.mjs', 'build-relay.mjs', 'test-ssh-runtime.mjs', 'test-install-runtime.mjs', 'test-masterdns-metering.py', 'test-tunnel-transports.py']) copy('scripts/' + file);
 mkdirSync(join(destination, 'docs'));
-for (const file of ['easy-install.md', 'guide.fa.md', 'operator-guide.md', 'operator-guide.fa.md', 'release-2026-11-22.md', 'cloudflare.md', 'release-2026-11-20.md', 'validation-2026-11-15.md', 'automatic-setup-2026-10-29.md', 'launch-guide.md', 'release-acceptance.md', 'panel-research.md', 'feature-matrix.md', 'gateway-contract.md', 'masterdnsvpn-shared.md', 'subscription-templates.md', 'team-subscriptions-testing.md', 'dns-masterdns-guide.md', 'certificates-tunnels-ai.md', 'universal-panel-2026-10-28.md']) copy('docs/' + file);
+for (const file of ['panel-guide.html', 'panel-guide.zip', 'easy-install.md', 'guide.fa.md', 'operator-guide.md', 'operator-guide.fa.md', 'release-2026-11-22.md', 'cloudflare.md', 'release-2026-11-20.md', 'validation-2026-11-15.md', 'automatic-setup-2026-10-29.md', 'launch-guide.md', 'release-acceptance.md', 'panel-research.md', 'feature-matrix.md', 'gateway-contract.md', 'masterdnsvpn-shared.md', 'subscription-templates.md', 'team-subscriptions-testing.md', 'dns-masterdns-guide.md', 'certificates-tunnels-ai.md', 'universal-panel-2026-10-28.md']) copy('docs/' + file);
 // Public assets may include supplied fonts with unverified redistribution rights.
 // Use system fallbacks in the source kit until their license is supplied.
 mkdirSync(join(destination, 'public'));

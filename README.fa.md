@@ -2,6 +2,8 @@
 
 **پنل مدیریت VPN روی Cloudflare Workers — ساخته‌شده توسط Ben the Builder**
 
+**[دانلود راهنمای تصویری پنل](https://github.com/BenTheBuilder-BenX/BenX-UI/raw/refs/heads/main/docs/panel-guide.zip)** · فایل را از حالت فشرده خارج کنید و `BenX-UI-guide.html` را در مرورگر باز کنید. برای فارسی، بالای صفحه «فارسی» را بزنید. راهنما شامل پیش‌نیازها، جست‌وجوی بخش‌ها و آموزش گام‌به‌گام است. [مشاهدهٔ فایل HTML](docs/panel-guide.html)
+
 [English](README.md) · [راهنمای همهٔ بخش‌ها](docs/operator-guide.fa.md) · [نصب فارسی](docs/guide.fa.md) · [راهنمای انگلیسی](docs/operator-guide.md) · [تغییرات این نسخه](docs/release-2026-11-22.md)
 
 **[v0.9.0-preview.3](https://github.com/BenTheBuilder-BenX/BenX-UI/releases/tag/v0.9.0-preview.3)** حسابداری حجمی MasterDNS با VLESS خصوصی، تحویل خودکار خرید تلگرام و راهنمای فارسی و انگلیسی داخل پنل را اضافه می‌کند. [یادداشت انتشار](docs/release-2026-11-22.md)
