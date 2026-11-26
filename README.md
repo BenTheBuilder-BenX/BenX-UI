@@ -6,6 +6,8 @@
 
 [فارسی](README.fa.md) · [Operator guide](docs/operator-guide.md) · [راهنمای همهٔ بخش‌ها](docs/operator-guide.fa.md) · [Installation](docs/easy-install.md) · [Cloudflare operations](docs/cloudflare.md)
 
+**[v0.9.0-preview.4](https://github.com/BenTheBuilder-BenX/BenX-UI/releases/tag/v0.9.0-preview.4)** · Customers can now rate their subscription and open the seller’s support or renewal link. Sellers can configure both links and see ratings in **Subscription settings**. [Subscription guide](docs/subscription-templates.md)
+
 **[v0.9.0-preview.3](https://github.com/BenTheBuilder-BenX/BenX-UI/releases/tag/v0.9.0-preview.3)** adds metered MasterDNS subscriptions, Telegram purchase delivery for DNS plans, and English and Persian guides inside the panel. [Release notes](docs/release-2026-11-22.md)
 
 <!-- BENX_DEPLOY_BUTTON -->

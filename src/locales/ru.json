@@ -1958,5 +1958,6 @@
   "These links appear on subscription pages for this server.": "Эти ссылки отображаются на страницах подписки этого сервера.",
   "Purchase or renewal URL (optional)": "Ссылка для покупки или продления (необязательно)",
   "Seller links must use HTTPS without embedded credentials.": "Укажите HTTPS-ссылку без имени пользователя и пароля.",
-  "Subscription settings changed. Reopen settings before saving.": "Настройки изменились. Откройте их снова перед сохранением."
+  "Subscription settings changed. Reopen settings before saving.": "Настройки изменились. Откройте их снова перед сохранением.",
+  "{0} / 5 from 1 rating": "{0} из 5 на основе одной оценки"
 }

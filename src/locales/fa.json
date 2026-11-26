@@ -2116,5 +2116,6 @@
   "These links appear on subscription pages for this server.": "این لینک‌ها در صفحهٔ اشتراک مشتریان این سرور نمایش داده می‌شوند.",
   "Purchase or renewal URL (optional)": "لینک خرید یا تمدید (اختیاری)",
   "Seller links must use HTTPS without embedded credentials.": "لینک فروشنده باید با HTTPS شروع شود و شامل نام کاربری یا گذرواژه نباشد.",
-  "Subscription settings changed. Reopen settings before saving.": "تنظیمات اشتراک تغییر کرده است. تنظیمات را دوباره باز کنید."
+  "Subscription settings changed. Reopen settings before saving.": "تنظیمات اشتراک تغییر کرده است. تنظیمات را دوباره باز کنید.",
+  "{0} / 5 from 1 rating": "میانگین {0} از ۵ بر اساس یک امتیاز"
 }

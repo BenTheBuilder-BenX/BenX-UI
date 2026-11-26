@@ -1872,5 +1872,6 @@
   "These links appear on subscription pages for this server.",
   "Purchase or renewal URL (optional)",
   "Seller links must use HTTPS without embedded credentials.",
-  "Subscription settings changed. Reopen settings before saving."
+  "Subscription settings changed. Reopen settings before saving.",
+  "{0} / 5 from 1 rating"
 ]

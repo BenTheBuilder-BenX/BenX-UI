@@ -1958,5 +1958,6 @@
   "These links appear on subscription pages for this server.": "这些链接会显示在此服务器的订阅页面上。",
   "Purchase or renewal URL (optional)": "购买或续订链接（可选）",
   "Seller links must use HTTPS without embedded credentials.": "请使用不含用户名或密码的 HTTPS 链接。",
-  "Subscription settings changed. Reopen settings before saving.": "订阅设置已更改。请重新打开设置后再保存。"
+  "Subscription settings changed. Reopen settings before saving.": "订阅设置已更改。请重新打开设置后再保存。",
+  "{0} / 5 from 1 rating": "平均 {0} / 5，共 1 条评分"
 }

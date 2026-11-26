@@ -38,7 +38,7 @@ export function SubscriptionSettings({ path, demoKey, seller, onClose }: {
         <Field label={t('Support URL (optional)')}><input type="url" dir="ltr" maxLength={250} placeholder="https://t.me/your_support" value={settings.support} onChange={e => setSettings({ ...settings, support: e.target.value })}/></Field>
         <Field label={t('Purchase or renewal URL (optional)')}><input type="url" dir="ltr" maxLength={250} placeholder="https://shop.example.com" value={settings.purchase} onChange={e => setSettings({ ...settings, purchase: e.target.value })}/></Field>
         <section><h3>{t('Customer ratings')}</h3><p>{settings.count && settings.average !== null
-          ? t('{0} / 5 from {1} ratings', settings.average.toFixed(1), settings.count)
+          ? t(settings.count === 1 ? '{0} / 5 from 1 rating' : '{0} / 5 from {1} ratings', settings.average.toFixed(1), settings.count)
           : t('No ratings yet.')}</p></section>
       </> : !error && <p>{t('Loading…')}</p>}
     </div>

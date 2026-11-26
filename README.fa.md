@@ -6,6 +6,8 @@
 
 [English](README.md) · [راهنمای همهٔ بخش‌ها](docs/operator-guide.fa.md) · [نصب فارسی](docs/guide.fa.md) · [راهنمای انگلیسی](docs/operator-guide.md) · [تغییرات این نسخه](docs/release-2026-11-22.md)
 
+**[v0.9.0-preview.4](https://github.com/BenTheBuilder-BenX/BenX-UI/releases/tag/v0.9.0-preview.4)** · مشتریان می‌توانند به اشتراک خود امتیاز بدهند و از همان صفحه برای پشتیبانی، خرید یا تمدید اقدام کنند. فروشنده می‌تواند در **تنظیمات اشتراک** لینک‌ها را وارد کند و میانگین امتیازها را ببیند. [راهنمای اشتراک](docs/subscription-templates.md)
+
 **[v0.9.0-preview.3](https://github.com/BenTheBuilder-BenX/BenX-UI/releases/tag/v0.9.0-preview.3)** حسابداری حجمی MasterDNS با VLESS خصوصی، تحویل خودکار خرید تلگرام و راهنمای فارسی و انگلیسی داخل پنل را اضافه می‌کند. [یادداشت انتشار](docs/release-2026-11-22.md)
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https%3A%2F%2Fgithub.com%2FBenTheBuilder-BenX%2FBenX-UI)
