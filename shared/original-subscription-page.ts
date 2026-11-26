@@ -1,13 +1,14 @@
+import { feedbackCSS } from './subscription-feedback';
 import {originalSubscriptionAssets} from './original-subscription-assets';
 import {escapeHTML} from './subscription-page';
 export interface OriginalSubData {name:string;total:number;download:number;upload:number;start:number|null;expire:number|null;durationDays:number;pendingDays:number;active:boolean;url:string;language:string;apps:{name:string;url:string;download:string}[];qr:string;expiryLabel:string}
 export const originalThemeNames=Object.keys(originalSubscriptionAssets);
-export function originalSubscriptionPage(theme:string,data:OriginalSubData,options:{nonce:string;announcements:string;extra:string;preview?:boolean}){
+export function originalSubscriptionPage(theme:string,data:OriginalSubData,options:{nonce:string;announcements:string;extra:string;feedback?:string;preview?:boolean}){
   let html:string=originalSubscriptionAssets[theme as keyof typeof originalSubscriptionAssets];
   if(!html) throw Error('Choose a supplied subscription template.');
   const safeJSON=JSON.stringify(data).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026');
   html=html.replace(/<html[^>]*>/,`<html data-template="${theme}" lang="${data.language}" dir="${data.language==='fa'?'rtl':'ltr'}">`);
-  html=html.replace('const INJECT=/*__SUB_DATA__*/null;',`const INJECT=${safeJSON};`)
+  html=html.replace('const INJECT=/*__SUB_DATA__*/null;',()=>`const INJECT=${safeJSON};`)
     .replace(/const D=INJECT\|\|\{[^;]+;/,'const D=INJECT;')
     .replace(/const span=noexp\?0:D.expire-\(D.start\|\|D.expire-30\*DAY\)/,'const span=noexp?0:(D.durationDays?D.durationDays*DAY:D.start?D.expire-D.start:0)')
     .replace(/fT=noexp\?1:Math.min\(1,Math.max\(0,\(D.expire-now\)\/span\)\)/,'fT=noexp?1:span>0?Math.min(1,Math.max(0,(D.expire-now)/span)):0')
@@ -25,10 +26,13 @@ const originalRender=render;render=()=>{originalRender();if(D.pendingDays){$('#t
 document.querySelectorAll('[data-copy]').forEach(b=>b.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(b.dataset.copy);b.textContent=t.copied}catch{const i=b.closest('article')?.querySelector('input');i?.select()}}));
 document.querySelectorAll('[data-reveal]').forEach(b=>b.addEventListener('click',()=>{const i=b.closest('details').querySelector('input[type=password],input[data-secret]');i.dataset.secret='1';i.type=i.type==='password'?'text':'password'}));
 })();`);
+  if (!options.preview) {
+    html = html.replace("st('lang',lang);render()", "const u=new URL(location.href);u.searchParams.set('lang',lang);location.assign(u.href)");
+  }
   const notices=options.announcements?`<div class="original-notices">${options.announcements}</div>`:'';
-  html=html.replace('<div class="who">',notices+'<div class="who">');
-  html=html.replace('<p class="foot">BenX-UI</p>',`${options.extra?`<details class="c original-extra"><summary>${({en:'Apps & connection files',fa:'برنامه‌ها و فایل‌های اتصال',ru:'Приложения и файлы',zh:'应用与连接文件'} as Record<string,string>)[data.language]||'Apps & connection files'}</summary>${options.extra}</details>`:''}<p class="foot">BenX-UI</p>`);
-  html=html.replace('</style>',`.original-notices{margin:20px 0}.original-notices aside{background:var(--gl);border:1px solid var(--bd);border-radius:18px;padding:16px;margin-bottom:12px}.original-notices p{white-space:pre-wrap}.original-extra{margin-top:14px}.original-extra summary{cursor:pointer}.original-extra .panel{margin-top:20px}.original-extra .apps{display:grid;grid-template-columns:1fr}.original-extra article{padding:12px;border:1px solid var(--bd);border-radius:14px;margin:10px 0}.original-extra input{width:100%;min-width:0;color:var(--tx);background:var(--gl);border:1px solid var(--bd);border-radius:10px;padding:10px;font:12px monospace;margin:10px 0}.original-extra button,.original-extra a{font:inherit;color:var(--tx);background:var(--gl);border:1px solid var(--bd);border-radius:12px;padding:8px 12px;text-decoration:none;display:inline-block}.original-extra table{width:100%;border-collapse:collapse;font-size:12px}.original-extra th,.original-extra td{padding:8px;border-bottom:1px solid var(--bd);text-align:start;overflow-wrap:anywhere}.original-extra h2{font-size:16px;margin:12px 0}.original-extra article div{display:flex;flex-wrap:wrap;gap:8px}</style>`);
+  html=html.replace('<div class="who">',()=>notices+'<div class="who">');
+  html=html.replace('<p class="foot">BenX-UI</p>',()=>`${options.feedback || ''}${options.extra?`<details class="c original-extra"><summary>${({en:'Apps & connection files',fa:'برنامه‌ها و فایل‌های اتصال',ru:'Приложения и файлы',zh:'应用与连接文件'} as Record<string,string>)[data.language]||'Apps & connection files'}</summary>${options.extra}</details>`:''}<p class="foot">BenX-UI</p>`);
+  html=html.replace('</style>',`${feedbackCSS}.original-notices{margin:20px 0}.original-notices aside{background:var(--gl);border:1px solid var(--bd);border-radius:18px;padding:16px;margin-bottom:12px}.original-notices p{white-space:pre-wrap}.original-extra{margin-top:14px}.original-extra summary{cursor:pointer}.original-extra .panel{margin-top:20px}.original-extra .apps{display:grid;grid-template-columns:1fr}.original-extra article{padding:12px;border:1px solid var(--bd);border-radius:14px;margin:10px 0}.original-extra input{width:100%;min-width:0;color:var(--tx);background:var(--gl);border:1px solid var(--bd);border-radius:10px;padding:10px;font:12px monospace;margin:10px 0}.original-extra button,.original-extra a{font:inherit;color:var(--tx);background:var(--gl);border:1px solid var(--bd);border-radius:12px;padding:8px 12px;text-decoration:none;display:inline-block}.original-extra table{width:100%;border-collapse:collapse;font-size:12px}.original-extra th,.original-extra td{padding:8px;border-bottom:1px solid var(--bd);text-align:start;overflow-wrap:anywhere}.original-extra h2{font-size:16px;margin:12px 0}.original-extra article div{display:flex;flex-wrap:wrap;gap:8px}</style>`);
   html=html.replaceAll('<script>',`<script nonce="${options.nonce}">`).replace('<title>BenX Subscription</title>',`<title>${escapeHTML(data.name)} · BenX</title>`);
   return html;
 }

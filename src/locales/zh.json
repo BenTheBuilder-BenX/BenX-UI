@@ -1949,5 +1949,14 @@
   "No matching sections": "未找到匹配的栏目",
   "Skip to content": "跳至内容",
   "Language could not be loaded. Please retry.": "无法加载语言，请重试。",
-  "Reload panel": "重新加载面板"
+  "Reload panel": "重新加载面板",
+  "Subscription settings": "订阅设置",
+  "Customer ratings": "客户评分",
+  "No ratings yet.": "暂无评分。",
+  "{0} / 5 from {1} ratings": "平均 {0} / 5，共 {1} 条评分",
+  "These links appear on your customers’ subscriptions. Leave a field empty to use the server default.": "这些链接会显示在您客户的订阅页面上。留空即可使用服务器默认链接。",
+  "These links appear on subscription pages for this server.": "这些链接会显示在此服务器的订阅页面上。",
+  "Purchase or renewal URL (optional)": "购买或续订链接（可选）",
+  "Seller links must use HTTPS without embedded credentials.": "请使用不含用户名或密码的 HTTPS 链接。",
+  "Subscription settings changed. Reopen settings before saving.": "订阅设置已更改。请重新打开设置后再保存。"
 }

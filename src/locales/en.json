@@ -1863,5 +1863,14 @@
   "•••••••• (stored securely)",
   "•••••••• Saved token",
   "•••••••• · key saved",
-  "� saved settings"
+  "� saved settings",
+  "Subscription settings",
+  "Customer ratings",
+  "No ratings yet.",
+  "{0} / 5 from {1} ratings",
+  "These links appear on your customers’ subscriptions. Leave a field empty to use the server default.",
+  "These links appear on subscription pages for this server.",
+  "Purchase or renewal URL (optional)",
+  "Seller links must use HTTPS without embedded credentials.",
+  "Subscription settings changed. Reopen settings before saving."
 ]

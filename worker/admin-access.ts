@@ -21,7 +21,7 @@ export async function adminAccess(request: Request, env: Env, actor: Principal) 
   const path = new URL(request.url).pathname;
   if (['/api/servers', '/api/audit', '/api/providers/vpnjantit', '/api/operation-mode'].includes(path) && request.method === 'GET') return;
   if ((path === '/api/store' || path.startsWith('/api/store/')) && canManageStore(actor)) return;
-  const server = path.match(/^\/api\/servers\/([^/]+)\/(request|health|probe|restore|upload|policy|subscriptions|subscription-page|locations|control|dashboard)$/);
+  const server = path.match(/^\/api\/servers\/([^/]+)\/(request|health|probe|restore|upload|policy|subscriptions|subscription-page|subscription-settings|locations|control|dashboard)$/);
   if (server) {
     requireServer(actor, server[1]);
     if (server[2] === 'control' && request.method !== 'GET') {

@@ -1,3 +1,4 @@
+import { subscriptionSettings } from './subscription-settings';
 import { defaultPermissions, validateMember, type TeamMember, type MemberLimits, type MemberPermissions, type MemberGrant, type PortalCustomer } from '../shared/team';
 import { reduceDocument, validateDocument, type ManagedDocument } from '../shared/managed';
 import { primaryAttachmentIds } from '../shared/masterdns';
@@ -124,6 +125,9 @@ export async function teamRoute(request: Request, env: Env, ctx: ExecutionContex
   }
   const ownerId = root ? new URL(request.url).searchParams.get('owner') : actor.member!.id;
   const m = ownerId ? await env.DB.prepare('SELECT * FROM team_members WHERE id=?').bind(ownerId).first<MemberRow>() : null;
+  if (path === '/api/portal/subscription-settings' && m && m.role === 'reseller') {
+    return subscriptionSettings(request, env, 'seller', m.id);
+  }
   if (path === '/api/portal' && request.method === 'GET') {
     if (!m) throw new HttpError(404, 'Account not found.');
     const customers = (await env.DB.prepare('SELECT * FROM team_customers WHERE owner_id=? ORDER BY created_at DESC').bind(m.id).all<CustomerRow>()).results;
@@ -177,7 +181,10 @@ export async function teamRoute(request: Request, env: Env, ctx: ExecutionContex
     const server = await env.DB.prepare('SELECT * FROM servers WHERE id=? AND enabled=1').bind(serverId).first<StoredServer>(); if (!server) throw new HttpError(404, 'Server unavailable.');
     const detail = parseObject(await callRemoteJson(server, env, { path: '/panel/api/clients/get/' + encodeURIComponent(c!.email), method: 'GET' })), live = parseObject(detail.client || detail);
     if (live.subId !== c!.identity) throw new HttpError(409, 'Customer identity changed. Contact the owner.');
-    return Response.json({ token: await issueStoreSubscription(env, server, c!.email, c!.identity) });
+    const token = await issueStoreSubscription(env, server, c!.email, c!.identity);
+    const policy = await env.DB.prepare('SELECT data FROM server_policy WHERE server_id=?').bind(server.id).first<{ data: string }>();
+    const origin = policy && JSON.parse(policy.data).subscriptionOrigin || new URL(request.url).origin;
+    return Response.json({ token, url: origin + '/sub/' + token });
   }
   if (!['POST', 'PUT', 'DELETE'].includes(request.method) || request.method === 'PUT' && !c || request.method === 'DELETE' && !c) throw new HttpError(405, 'Method not allowed.');
   const b = request.method === 'DELETE' ? null : validateCustomer(await readJson(request), m, c ?? undefined);

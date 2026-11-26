@@ -2,6 +2,14 @@
 
 Open **Subscriptions → Page templates** for the selected server. Existing customer links and QR codes stay the same when you change a design.
 
+## Seller links and ratings
+
+Open **Subscriptions → Subscription settings** to enter the HTTPS links for support and purchases or renewals. Resellers can open **Subscription settings** in their own workspace to override either link for their customers. An empty reseller field uses the server default.
+
+Share the **Main link** or its QR code. Opening it in a browser shows enabled announcements, seller links and a rating form. An active customer can save a score from 1 to 5 and update it later. Subscription settings shows the average score and the number of subscriptions that have rated. Resellers see results for their own customers.
+
+Importing the main link into V2Box delivers the connection feed. The app-specific links for V2Ray, V2Box, Happ, sing-box and Clash continue to deliver their respective formats.
+
 ## Built-in layouts
 
 - **Aurora** adapts the supplied `sub-page.html`: soft gradient background, glass cards and circular remaining-data/time indicators. It uses real customer counters and expiry, with no demonstration customer values or external scripts.

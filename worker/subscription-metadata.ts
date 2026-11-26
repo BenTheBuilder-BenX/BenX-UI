@@ -1,4 +1,4 @@
-import { defaultPageDesign, type SubscriptionPageDesign } from '../shared/subscription-page';
+import { customerPageDesign } from './subscription-settings';
 import { reportedClientExpiry, reportedClientTraffic } from '../shared/client-usage';
 import { parseObject, type JsonObject } from '../shared/types';
 export function utf8Base64(value: string) { return btoa(Array.from(new TextEncoder().encode(value), byte => String.fromCharCode(byte)).join('')); }
@@ -10,9 +10,8 @@ export function subscriptionUsage(detail: JsonObject) {
     && !(quota > 0 && used >= quota) && !(expiry > 0 && expiry <= Date.now());
   return { client, traffic, up, down, used, quota, expiry, active };
 }
-export async function subscriptionMetadata(env: Env, serverId: string, usage: ReturnType<typeof subscriptionUsage>, general: string) {
-  const saved = await env.DB.prepare('SELECT data FROM subscription_pages WHERE server_id=?').bind(serverId).first<{data:string}>();
-  const design:SubscriptionPageDesign = saved ? JSON.parse(saved.data) : defaultPageDesign;
+export async function subscriptionMetadata(env: Env, serverId: string, email: string, usage: ReturnType<typeof subscriptionUsage>, general: string) {
+  const design = await customerPageDesign(env, serverId, email);
   const amount=(value:unknown)=>Math.max(0,Math.floor(Number(value)||0));
   const headers:Record<string,string>={
     'subscription-userinfo': `upload=${amount(usage.up)}; download=${amount(usage.down)}; total=${amount(usage.quota)}; expire=${amount(usage.expiry / 1000)}`,
@@ -21,6 +20,6 @@ export async function subscriptionMetadata(env: Env, serverId: string, usage: Re
   // Standard subscription metadata. Apps decide whether/how to display the announcement.
   const announcement=(design.announcements||[]).filter(a=>a.enabled).map(a=>[a.title,a.message].filter(Boolean).join('\n')).join('\n\n').slice(0,4000);
   if(announcement)headers.announce='base64:'+utf8Base64(announcement);
-  if(design.support && /^https:\/\//.test(design.support)) headers['support-url']=design.support;
+  if(design.support && /^https:\/\//.test(design.support)) headers['support-url']=new URL(design.support).href;
   return headers;
 }

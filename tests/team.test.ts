@@ -9,6 +9,7 @@ import { emptyDocument } from '../shared/managed';
 import { defaultLimits, defaultPermissions, type TeamMember } from '../shared/team';
 import worker from '../worker/index';
 import { teamFixture } from './team-fixture';
+import { customerPageDesign, subscriptionSettings } from '../worker/subscription-settings';
 let f: ReturnType<typeof teamFixture>, member: TeamMember;
 const remote = vi.mocked(callRemoteJson), root: Principal = { role: 'root', username: 'owner' }, GB = 1024 ** 3;
 const request = (path: string, method = 'GET', b?: unknown, actor = root) => teamRoute(new Request('https://benx.example/api/' + path, { method, headers: { 'Content-Type': 'application/json' }, body: b === undefined ? undefined : JSON.stringify(b) }), f.env, f.ctx, actor);
@@ -24,6 +25,23 @@ beforeEach(async () => {
 });
 afterEach(async () => { await Promise.allSettled(f.waits); f.db.close(); });
 describe('Restricted customer accounts', () => {
+  it('keeps seller purchase and support settings scoped to their own customers', async () => {
+    const actor = await acting();
+    const links = { support: 'https://help.example/contact', purchase: 'https://shop.example/renew', version: 0 };
+    const path = 'portal/subscription-settings?owner=someone-else';
+    await request(path, 'PUT', links, actor);
+    expect(await (await request(path, 'GET', undefined, actor)).json()).toMatchObject({ ...links, version: 1, count: 0 });
+    await expect(request(path, 'PUT', links, actor)).rejects.toMatchObject({ status: 409 });
+    await expect(request(path, 'PUT', { ...links, version: 1, purchase: 'javascript:alert(1)' }, actor)).rejects.toMatchObject({ status: 400 });
+    await request('portal/customers', 'POST', body(), actor);
+    const [c] = await customers();
+    const serverLinks = { ...links, purchase: 'https://shop.example/server' };
+    await subscriptionSettings(new Request('https://benx.example', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(serverLinks) }), f.env, 'server', 's');
+    expect((await customerPageDesign(f.env, 's', c.email)).purchase).toBe(links.purchase);
+    expect((await customerPageDesign(f.env, 's', 'unassigned')).purchase).toBe(serverLinks.purchase);
+    await request(path, 'PUT', { ...links, purchase: '', version: 1 }, actor);
+    expect((await customerPageDesign(f.env, 's', c.email)).purchase).toBe(serverLinks.purchase);
+  });
   it('shows an acknowledged traffic reset on the next saved dashboard read', async () => {
     const row = (await managedRow(f.env, 's'))!, d = await savedDocument(f.env, row);
     d.state.clients.alice = { email: 'alice', id: 'alice-id', inboundIds: [1] };

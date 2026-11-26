@@ -8,7 +8,7 @@ import { subscription } from '../shared/subscriptions';
 import { inboundClients, parseObject, type Inbound } from '../shared/types';
 import { shareLink } from '../src/lib/links';
 import { callRemoteJson, type StoredServer } from './remote';
-import { decrypt, encrypt, HttpError, readJson } from './security';
+import { assertOrigin, decrypt, encrypt, HttpError, readJson, readLimited } from './security';
 async function hash(token: string) { return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token))), b => b.toString(16).padStart(2, '0')).join(''); }
 export async function issueStoreSubscription(env: Env, server: StoredServer, email: string, subId: string, reuse = true) {
   const identity = await hash(subId);
@@ -17,7 +17,8 @@ export async function issueStoreSubscription(env: Env, server: StoredServer, ema
   if (prior?.identity === identity) return decrypt<string>(prior.secret, env.ENCRYPTION_KEY);
   const token = Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, '0')).join('');
   const result = await env.DB.prepare(`INSERT INTO subscriptions(server_id,email,token_hash,secret,created_at,identity) VALUES(?,?,?,?,?,?)
-    ON CONFLICT(server_id,email) DO UPDATE SET token_hash=excluded.token_hash,secret=excluded.secret,created_at=excluded.created_at,identity=excluded.identity
+    ON CONFLICT(server_id,email) DO UPDATE SET token_hash=excluded.token_hash,secret=excluded.secret,created_at=excluded.created_at,identity=excluded.identity,
+      rating=CASE WHEN subscriptions.identity=excluded.identity THEN subscriptions.rating ELSE NULL END
     WHERE ?=0 OR (subscriptions.identity=? AND subscriptions.identity!=excluded.identity)`)
     .bind(server.id, email, await hash(token), await encrypt(token, env.ENCRYPTION_KEY), Date.now(), identity, Number(reuse), prior?.identity ?? null).run();
   if (result.meta.changes) return token;
@@ -74,15 +75,33 @@ function matchingDNSConfig(profile: string, inbound: Inbound) {
     && data.PROTOCOL_TYPE === (settings.meteredInboundId ? 'TCP' : 'SOCKS5');
 }
 export async function publicSubscription(request: Request, env: Env) {
-  const match = new URL(request.url).pathname.match(/^\/sub\/([a-f0-9]{64})(?:\/(v2ray|v2box|singbox|clash|happ|page|download))?$/);
-  if (!match || request.method !== 'GET') throw new HttpError(404, 'Subscription not found.');
-  const row = await env.DB.prepare('SELECT server_id,email,identity FROM subscriptions WHERE token_hash=?').bind(await hash(match[1])).first<{ server_id: string; email: string; identity: string }>();
+  const match = new URL(request.url).pathname.match(/^\/sub\/([a-f0-9]{64})(?:\/(v2ray|v2box|singbox|clash|happ|page|download|rating))?$/);
+  if (!match || request.method !== (match[2] === 'rating' ? 'POST' : 'GET')) throw new HttpError(404, 'Subscription not found.');
+  const tokenHash = await hash(match[1]);
+  const row = await env.DB.prepare('SELECT server_id,email,identity,rating FROM subscriptions WHERE token_hash=?').bind(tokenHash).first<{ server_id: string; email: string; identity: string; rating: number | null }>();
   if (!row) throw new HttpError(404, 'Subscription not found or revoked.');
   const server = await env.DB.prepare('SELECT * FROM servers WHERE id=?').bind(row.server_id).first<StoredServer>();
   if (!await accountSubscriptionAllowed(env, row.server_id, row.email)) throw new HttpError(403, 'Customer account is paused or depleted.');
   if (!server || !server.enabled) throw new HttpError(404, 'Subscription unavailable.');
   const requested = match[2] || (request.headers.get('Accept')?.includes('text/html') ? 'page' : undefined);
-  if (requested === 'page') return subscriptionLanding(request, env, server, row.email, match[1], row.identity);
+  if (requested === 'page') return subscriptionLanding(request, env, server, row.email, match[1], row.identity, row.rating);
+  if (requested === 'rating') {
+    assertOrigin(request);
+    if (request.headers.get('content-type')?.split(';')[0] !== 'application/x-www-form-urlencoded') throw new HttpError(415, 'Expected a rating form.');
+    const form = new URLSearchParams(new TextDecoder().decode(await readLimited(request, 128)));
+    const score = form.get('rating');
+    if (form.getAll('rating').length !== 1 || !/^[1-5]$/.test(score || '')) throw new HttpError(400, 'Choose a rating from 1 to 5.');
+    const detail = parseObject(await callRemoteJson(server, env, { path: '/panel/api/clients/get/' + encodeURIComponent(row.email), method: 'GET' }));
+    const { client, active } = subscriptionUsage(detail);
+    if (typeof client.subId !== 'string' || !client.subId || await hash(client.subId) !== row.identity) throw new HttpError(404, 'Subscription identity changed.');
+    if (!active) throw new HttpError(403, 'Client disabled, depleted or expired.');
+    const updated = await env.DB.prepare('UPDATE subscriptions SET rating=? WHERE token_hash=? AND identity=?').bind(Number(score), tokenHash, row.identity).run();
+    if (!updated.meta.changes) throw new HttpError(404, 'Subscription not found or revoked.');
+    const next = new URL(request.url);
+    next.pathname = '/sub/' + match[1] + '/page';
+    next.hash = 'rating';
+    return new Response(null, { status: 303, headers: { Location: next.href, 'Cache-Control': 'no-store', 'Referrer-Policy': 'same-origin' } });
+  }
   const stored = await env.DB.prepare('SELECT data FROM server_policy WHERE server_id=?').bind(server.id).first<{ data: string }>();
   const policy: ServerPolicy = stored ? JSON.parse(stored.data) : newPolicy();
   const plan = policy.services.find(s => s.id === policy.clients[row.email]?.serviceId);
@@ -119,6 +138,6 @@ export async function publicSubscription(request: Request, env: Env) {
   if (!Array.isArray(links) || links.length > 1000 || links.some(l => typeof l !== 'string')) throw new HttpError(502, 'Invalid remote subscription links.');
   let result: ReturnType<typeof subscription>; try { result = subscription(links, format, policy.subscriptions[format]?.options); } catch (e) { throw new HttpError(422, (e as Error).message); }
   const interval = Number(policy.subscriptions[format]?.options.updateHours || 6);
-  const headers = await subscriptionMetadata(env, server.id, usage, (policy.subscriptionOrigin || new URL(request.url).origin) + '/sub/' + match[1]);
+  const headers = await subscriptionMetadata(env, server.id, row.email, usage, (policy.subscriptionOrigin || new URL(request.url).origin) + '/sub/' + match[1]);
   return new Response(result.body, { headers: { ...headers, 'Content-Type': result.type, 'Cache-Control': 'no-store', 'Vary': 'Accept', 'X-BenX-Excluded-Connections': String(result.excluded || 0), 'X-Content-Type-Options': 'nosniff', 'profile-update-interval': String(Number.isInteger(interval) && interval >= 1 && interval <= 168 ? interval : 6), 'profile-title': `base64:${utf8Base64('BenX-UI - ' + formatNames[format])}` } });
 }

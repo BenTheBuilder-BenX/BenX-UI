@@ -8,6 +8,8 @@ import { emptyDocument, configurationView } from '../shared/managed';
 import { defaultLabSpec, previewLab, type LabSpec } from '../shared/lab';
 import { customSubscriptionStarter, defaultPageDesign, validatePageDesign } from '../shared/subscription-page';
 import { pageDesignRoute, subscriptionLanding } from '../worker/subscription-page';
+import { subscriptionSettings } from '../worker/subscription-settings';
+import { originalThemeNames } from '../shared/original-subscription-page';
 import { publicSubscription, issueStoreSubscription, subscriptionAdmin } from '../worker/subscriptions';
 import { encrypt, decrypt } from '../worker/security';
 import { currentAIModel } from '../shared/assistant';
@@ -175,6 +177,44 @@ describe('Designed customer subscription pages', () => {
     expect(atob(await app.text())).toContain('socks://benx_');
     const explicit = await publicSubscription(new Request(url + '/singbox', { headers: { Accept: 'text/html' } }), f.env);
     expect((await explicit.json() as { outbounds: { type: string }[] }).outbounds.some(p => p.type === 'socks')).toBe(true);
+  });
+  it('renders seller actions on all themes and updates one rating without changing any app payload', async () => {
+    const server = f.db.prepare('SELECT * FROM servers').get() as unknown as import('../worker/remote').StoredServer;
+    const token = await issueStoreSubscription(f.env, server, 'alice', 'identity');
+    const origin = 'https://benx.example', url = origin + '/sub/' + token;
+    let subId = 'identity';
+    vi.mocked(callRemoteJson).mockImplementation(async (_s, _e, req) => req.path.endsWith('/inbounds/list')
+      ? [{ id: 1, protocol: 'socks', enable: true, port: 1080, settings: { publicHost: 'vpn.example.com', clients: [{ email: 'alice', password: 'secret' }] } }]
+      : { email: 'alice', subId, enable: true });
+    const feed = async (suffix: string) => (await publicSubscription(new Request(url + suffix, { headers: { Accept: suffix ? 'text/html' : '*/*' } }), f.env)).text();
+    const formats = ['', '/v2box', '/v2ray', '/happ', '/singbox', '/clash'];
+    const before = await Promise.all(formats.map(feed));
+    for (const theme of [...originalThemeNames, 'custom']) {
+      const design = { ...defaultPageDesign, theme, customHTML: customSubscriptionStarter, support: 'https://support.example/help', purchase: 'https://shop.example/buy', announcements: [{ title: 'Maintenance', message: 'Sunday', enabled: true }] };
+      f.db.prepare('INSERT OR REPLACE INTO subscription_pages(server_id,data) VALUES(?,?)').run('s',JSON.stringify(design));
+      const page = await publicSubscription(new Request(url, { headers: { Accept: 'text/html' } }), f.env);
+      expect(page.headers.get('Content-Security-Policy')).toContain("form-action 'self'");
+      const html = await page.text();
+      for (const marker of [design.support, design.purchase, 'Maintenance', 'name="rating"', '/rating?lang=en']) expect(html, theme).toContain(marker);
+    }
+    const rate = (value: string, from = origin) => publicSubscription(new Request(url + '/rating?lang=fa', {
+      method: 'POST', headers: { Origin: from, 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'rating=' + value,
+    }), f.env);
+    await expect(rate('0')).rejects.toMatchObject({ status: 400 });
+    await expect(rate('4', 'https://elsewhere.example')).rejects.toMatchObject({ status: 403 });
+    const response = await rate('4');
+    expect(response.status).toBe(303);
+    expect(response.headers.get('Location')).toBe(url + '/page?lang=fa#rating');
+    expect(await feed('/page?lang=fa')).toContain('value="4" selected');
+    await rate('5');
+    const settings = await subscriptionSettings(new Request(origin), f.env, 'server', 's');
+    expect(await settings.json()).toMatchObject({ count: 1, average: 5 });
+    expect(await Promise.all(formats.map(feed))).toEqual(before);
+    subId = 'replacement';
+    await expect(rate('3')).rejects.toMatchObject({ status: 404 });
+    await issueStoreSubscription(f.env, server, 'alice', subId);
+    await expect(rate('4')).rejects.toMatchObject({ status: 404 });
+    expect(f.db.prepare('SELECT rating FROM subscriptions').get()?.rating).toBeNull();
   });
   it('exposes Unicode announcements as standard metadata and individual safe connection copying with true usage',async()=>{
     const server=f.db.prepare('SELECT * FROM servers').get() as unknown as import('../worker/remote').StoredServer;

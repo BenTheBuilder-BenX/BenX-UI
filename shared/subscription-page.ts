@@ -14,16 +14,26 @@ export const pageThemes = {
   classic: { name: 'Classic', description: 'Quiet editorial layout with a clear account ledger', accent: '#77583e', background: '#f7f4ef', symbol: '◎' },
 } as const;
 export interface SubscriptionAnnouncement { title: string; message: string; enabled: boolean }
-export interface SubscriptionPageDesign { theme: keyof typeof pageThemes; title: string; subtitle: string; accent: string; support: string; language: 'en' | 'fa' | 'ru' | 'zh'; customHTML?: string; announcements?: SubscriptionAnnouncement[] }
+export interface SubscriptionPageDesign { theme: keyof typeof pageThemes; title: string; subtitle: string; accent: string; support: string; purchase?: string; language: 'en' | 'fa' | 'ru' | 'zh'; customHTML?: string; announcements?: SubscriptionAnnouncement[] }
+export function sellerLink(value: unknown): string {
+  if (value === '') return '';
+  if (typeof value === 'string' && value.length <= 250 && /^https:\/\//i.test(value) && !/\s/.test(value)) {
+    try {
+      const url = new URL(value);
+      if (!url.username && !url.password) return value;
+    } catch { /* Show the same guidance for malformed URLs. */ }
+  }
+  throw new Error('Seller links must use HTTPS without embedded credentials.');
+}
 export const defaultPageDesign: SubscriptionPageDesign = { theme: 'crazy', title: 'Your connection', subtitle: 'Choose your app to connect.', accent: '#6366f1', support: '', language: 'en' };
 export function validatePageDesign(value: unknown): SubscriptionPageDesign {
   const b = value as SubscriptionPageDesign;
   if (!b || !Object.hasOwn(pageThemes, b.theme) || !['en', 'fa', 'ru', 'zh'].includes(b.language) || typeof b.title !== 'string' || !b.title.trim() || b.title.length > 80 || typeof b.subtitle !== 'string' || b.subtitle.length > 240 || typeof b.accent !== 'string' || !/^#[\da-f]{6}$/i.test(b.accent) || typeof b.support !== 'string' || b.support.length > 250) throw new Error('Choose a template and valid branding options.');
-  if (b.support) { const u = new URL(b.support); if (u.protocol !== 'https:' || u.username || u.password) throw new Error('Support links must use HTTPS without embedded credentials.'); }
+  const support = sellerLink(b.support), purchase = sellerLink(b.purchase ?? '');
   if (b.theme === "custom") validateCustomSubscriptionHTML(b.customHTML);
   const announcements = b.announcements ?? [];
   if (!Array.isArray(announcements) || announcements.length > 8 || announcements.some(a => !a || typeof a.title !== 'string' || a.title.length > 100 || typeof a.message !== 'string' || !a.message.trim() || a.message.length > 2000 || typeof a.enabled !== 'boolean')) throw new Error('Add up to eight announcements with a title and message (maximum 2000 characters).');
-  return { ...(b.theme === "custom" ? { customHTML: b.customHTML } : {}), ...(b.announcements !== undefined ? { announcements: announcements.map(a => ({ title: a.title.trim(), message: a.message.trim(), enabled: a.enabled })) } : {}), theme: b.theme, title: b.title.trim(), subtitle: b.subtitle, accent: b.accent, support: b.support, language: b.language };
+  return { ...(b.theme === "custom" ? { customHTML: b.customHTML } : {}), ...(b.announcements !== undefined ? { announcements: announcements.map(a => ({ title: a.title.trim(), message: a.message.trim(), enabled: a.enabled })) } : {}), theme: b.theme, title: b.title.trim(), subtitle: b.subtitle, accent: b.accent, support, ...(b.purchase !== undefined ? { purchase } : {}), language: b.language };
 }
 export function escapeHTML(s: unknown) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!); }
 

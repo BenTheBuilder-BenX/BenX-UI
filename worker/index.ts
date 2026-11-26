@@ -18,6 +18,7 @@ import { replacementRoute, resumeReplacements } from './replacement';
 import { cleanupRetiredServers } from './retirement';
 import { fleetInbound } from './fleet';
 import { policyRoute } from './policy';
+import { subscriptionSettings } from './subscription-settings';
 import { publicSubscription, subscriptionAdmin } from './subscriptions';
 import { reconcileTunnels, tunnelsRoute } from './tunnels';
 import { assistantRoute } from './assistant';
@@ -216,12 +217,13 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
     await audit(env, actor, server.id, 'Added connection', true);
     return json({ id: server.id }, 201);
   }
-  const match = url.pathname.match(/^\/api\/servers\/([^/]+)(?:\/(request|health|probe|restore|upload|policy|subscriptions|subscription-page|locations|control|replacement|dashboard|standbys))?$/);
+  const match = url.pathname.match(/^\/api\/servers\/([^/]+)(?:\/(request|health|probe|restore|upload|policy|subscriptions|subscription-page|subscription-settings|locations|control|replacement|dashboard|standbys))?$/);
   if (!match) throw new HttpError(404, 'API endpoint not found.');
   const server = await getServer(env, match[1]);
   const route = match[2];
   if (route === 'dashboard') return dashboard(request, env, server, ctx);
   if (route === 'standbys') { const response = await standbyRoute(request, env, server, ctx); if (request.method !== 'GET') await audit(env, actor, server.id, 'Changed approved standby copy', response.ok); return response; }
+  if (route === 'subscription-settings') return subscriptionSettings(request, env, 'server', server.id);
   if (route === 'subscription-page') return pageDesignRoute(request, env, server.id);
   if (route === 'control') { const response = await controlRoute(request, env, server, ctx); if (request.method !== 'GET') await audit(env, actor, server.id, 'Saved server synchronization action', response.ok); return response; }
   if (route === 'replacement') { const response = await replacementRoute(request, env, server, ctx); if (request.method !== 'GET') await audit(env, actor, server.id, 'VPS replacement action', response.ok); return response; }
@@ -329,7 +331,17 @@ async function probe(env: Env, server: StoredServer) {
 }
 export default {
   async fetch(request, env, ctx) {
-    try { const response = await handle(request, env, ctx); if (/^\/(api|sub|telegram)\//.test(new URL(request.url).pathname)) { const safe = new Response(response.body, response); for (const [key, value] of Object.entries(securityHeaders)) safe.headers.set(key, value); return safe; } return response; }
+    try {
+      const response = await handle(request, env, ctx), path = new URL(request.url).pathname;
+      if (!/^\/(api|sub|telegram)\//.test(path)) return response;
+      const safe = new Response(response.body, response);
+      for (const [key, value] of Object.entries(securityHeaders)) safe.headers.set(key, value);
+      // Browsers need a same-origin Origin on the rating form POST. Keep subscription URLs private off-site.
+      if (path.startsWith('/sub/') && response.headers.get('Content-Type')?.startsWith('text/html')) {
+        safe.headers.set('Referrer-Policy', 'same-origin');
+      }
+      return safe;
+    }
     catch (e) {
       if (e instanceof HttpError) return json({ success: false, msg: e.message }, e.status);
       console.error(JSON.stringify({ event: 'request_error', message: e instanceof Error ? e.name : 'UnknownError', path: (/^\/(sub|lab)\//.test(new URL(request.url).pathname)) ? '/subscription/[redacted]' : new URL(request.url).pathname }));

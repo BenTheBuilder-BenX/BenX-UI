@@ -2107,5 +2107,14 @@
   "Database setup is finishing. Please refresh in a few seconds.": "راه‌اندازی پایگاه داده در حال تکمیل است. چند ثانیه دیگر تازه‌سازی کنید.",
   "Installation is finishing. Refresh shortly.": "نصب در حال تکمیل است. کمی بعد تازه‌سازی کنید.",
   "Panel installation is finishing. Refresh shortly or open the latest private setup link.": "نصب پنل در حال تکمیل است. کمی بعد تازه‌سازی کنید یا تازه‌ترین پیوند خصوصی راه‌اندازی را باز کنید.",
-  "Connect your first VPS to start managing cores and customers.": "برای مدیریت هسته‌ها و مشتریان، نخستین VPS خود را متصل کنید."
+  "Connect your first VPS to start managing cores and customers.": "برای مدیریت هسته‌ها و مشتریان، نخستین VPS خود را متصل کنید.",
+  "Subscription settings": "تنظیمات اشتراک",
+  "Customer ratings": "امتیازهای مشتریان",
+  "No ratings yet.": "هنوز امتیازی ثبت نشده است.",
+  "{0} / 5 from {1} ratings": "میانگین {0} از ۵ بر اساس {1} امتیاز",
+  "These links appear on your customers’ subscriptions. Leave a field empty to use the server default.": "این لینک‌ها در صفحهٔ اشتراک مشتریان شما نمایش داده می‌شوند. برای استفاده از لینک پیش‌فرض سرور، فیلد را خالی بگذارید.",
+  "These links appear on subscription pages for this server.": "این لینک‌ها در صفحهٔ اشتراک مشتریان این سرور نمایش داده می‌شوند.",
+  "Purchase or renewal URL (optional)": "لینک خرید یا تمدید (اختیاری)",
+  "Seller links must use HTTPS without embedded credentials.": "لینک فروشنده باید با HTTPS شروع شود و شامل نام کاربری یا گذرواژه نباشد.",
+  "Subscription settings changed. Reopen settings before saving.": "تنظیمات اشتراک تغییر کرده است. تنظیمات را دوباره باز کنید."
 }

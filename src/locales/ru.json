@@ -1949,5 +1949,14 @@
   "No matching sections": "Разделы не найдены",
   "Skip to content": "Перейти к содержимому",
   "Language could not be loaded. Please retry.": "Не удалось загрузить язык. Повторите попытку.",
-  "Reload panel": "Перезагрузить панель"
+  "Reload panel": "Перезагрузить панель",
+  "Subscription settings": "Настройки подписки",
+  "Customer ratings": "Оценки клиентов",
+  "No ratings yet.": "Оценок пока нет.",
+  "{0} / 5 from {1} ratings": "{0} из 5 на основе {1} оценок",
+  "These links appear on your customers’ subscriptions. Leave a field empty to use the server default.": "Эти ссылки видны вашим клиентам. Оставьте поле пустым, чтобы использовать ссылку сервера.",
+  "These links appear on subscription pages for this server.": "Эти ссылки отображаются на страницах подписки этого сервера.",
+  "Purchase or renewal URL (optional)": "Ссылка для покупки или продления (необязательно)",
+  "Seller links must use HTTPS without embedded credentials.": "Укажите HTTPS-ссылку без имени пользователя и пароля.",
+  "Subscription settings changed. Reopen settings before saving.": "Настройки изменились. Откройте их снова перед сохранением."
 }
